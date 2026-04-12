@@ -1,0 +1,24 @@
+# backend/server.py
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/api/orders/process', methods=['POST'])
+def process_order():
+    data = request.json
+    user_id = data.get('userId')
+    product_id = data.get('productId')
+    quantity = data.get('quantity')
+    
+    print(f"Mottog beställning: Användare {user_id}, Produkt {product_id}, Antal {quantity}")
+    
+    # Här kan du senare lägga till riktig logik, t.ex. spara i en databas
+    return jsonify({
+        "success": True,
+        "message": "Beställningen mottogs av servern!",
+        "transactionId": 999
+    })
+
+if __name__ == '__main__':
+    # Kör servern på port 5000
+    app.run(host='0.0.0.0', port=5000)

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">K&amp;K Sales</string>
+
+    <!-- Navigation / Titlar -->
+    <string name="title_inventory">Lagerhantering</string>
+    <string name="title_catalog">Produktkatalog</string>
+    <string name="title_profile">Användarprofil</string>
+    <string name="title_bookkeeping">Bokföring</string>
+
+    <!-- Produkt / Lager -->
+    <string name="label_name">Namn</string>
+    <string name="label_unit_cost">Inköpspris</string>
+    <string name="label_sales_price">Försäljningspris</string>
+    <string name="label_quantity">Antal</string>
+    <string name="label_stock">Lager: %1$d %2$s</string>
+    <string name="label_unit">Enhet</string>
+    <string name="label_cost_price">Inköp: %1$s | Pris: %2$s</string>
+
+    <!-- Knappar / Åtgärder -->
+    <string name="action_add_product">Lägg till produkt</string>
+    <string name="action_edit_product">Redigera produkt</string>
+    <string name="action_save">Spara</string>
+    <string name="action_cancel">Avbryt</string>
+    <string name="action_delete">Ta bort</string>
+    <string name="action_edit">Redigera</string>
+    <string name="action_order_now">Beställ nu</string>
+    <string name="action_confirm_order">Bekräfta beställning</string>
+    <string name="action_place_order">Lägg beställning</string>
+
+    <!-- Meddelanden -->
+    <string name="msg_order_success">Beställningen har lagts!</string>
+    <string name="msg_error">Fel: %1$s</string>
+    <string name="msg_no_transactions">Inga transaktioner än</string>
+    <string name="msg_loading">Laddar...</string>
+
+    <!-- Profil / Ekonomi -->
+    <string name="label_balance">Saldo: %1$s</string>
+    <string name="label_transaction_history">Transaktionshistorik</string>
+    <string name="label_recent_transactions">Senaste transaktioner</string>
+    <string name="label_total_revenue">Total omsättning</string>
+    <string name="label_total_cost">Total kostnad</string>
+    <string name="label_total_profit">Total vinst</string>
+    <string name="currency_symbol">kr</string>
+    <string name="title_cart">Kundvagn</string>
+    <string name="action_add_to_cart">Lägg i korg</string>
+    <string name="action_checkout">Checka ut</string>
+    <string name="msg_cart_empty">Din korg är tom</string>
+    <string name="tab_history">Historik</string>
+    <string name="tab_manage_users">Användare</string>
+    <string name="action_logout">Logga ut</string>
+</resources>

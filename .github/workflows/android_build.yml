@@ -1,0 +1,71 @@
+name: Android Build & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_note:
+        description: 'Release notes'
+        required: false
+        default: 'Manual update from Developer Mode'
+      design_changes:
+        description: 'JSON string of design changes'
+        required: false
+        default: '{}'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Apply Design Changes
+        run: |
+          echo '${{ github.event.inputs.design_changes }}' > app/src/main/assets/design_config.json
+          # If assets dir doesn't exist, create it
+          mkdir -p app/src/main/assets
+          echo '${{ github.event.inputs.design_changes }}' > app/src/main/assets/design_config.json
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
+
+      - name: Get Version Info
+        id: version_info
+        run: |
+          VERSION_CODE=$(grep "VERSION_CODE" version.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep "VERSION_NAME" version.properties | cut -d'=' -f2)
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "TAG_NAME=v$VERSION_NAME" >> $GITHUB_ENV
+
+      - name: Commit and Push Version Update
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.properties version.json app/src/main/assets/design_config.json
+          git commit -m "chore: update version to $VERSION_NAME [skip ci]" || echo "No changes to commit"
+          git push origin main
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ env.VERSION_CODE }}
+          name: Release 1.0.${{ env.VERSION_CODE }}
+          body: ${{ github.event.inputs.version_note }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          token: ${{ secrets.GITHUB_TOKEN }}

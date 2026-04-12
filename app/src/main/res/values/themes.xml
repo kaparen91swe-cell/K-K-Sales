@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.KKSales" parent="Theme.MaterialComponents.Light" />
+</resources>
