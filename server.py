@@ -202,20 +202,31 @@ def trigger_deploy():
         subprocess.run(["git", "pull", "origin", "main", "--rebase"], check=True)
         subprocess.run(["git", "push", "origin", "main"], check=True)
 
-        # 3. Trigga GitHub Action med korrekta headers enligt docs
+        # 3. Trigga GitHub Action med exakta headers för Actions API
         headers = {
-            "Authorization": f"Bearer {current_token}",
+            "Authorization": f"token {current_token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "KKSales-App-Server"
         }
-        payload = {"ref": "main", "inputs": {"version_note": data.get("note", "Update from App"), "design_changes": json.dumps(data.get("changes", {}))}}
+        payload = {
+            "ref": "main",
+            "inputs": {
+                "version_note": data.get("note", "Update from App"),
+                "design_changes": json.dumps(data.get("changes", {}))
+            }
+        }
         url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW_FILE}/dispatches"
         
+        logger.info(f"Triggar workflow: {GITHUB_WORKFLOW_FILE}...")
         res = requests.post(url, headers=headers, json=payload)
+        
         if res.status_code == 204:
-            logger.info("SUCCESS: GitHub Action triggad!")
-            return jsonify({"success": True, "message": "Bygge startat!"})
+            logger.info("SUCCESS: GitHub Action triggad! APK bygget påbörjat.")
+            return jsonify({"success": True, "message": "Kod puschad och bygge startat!"})
+        elif res.status_code == 403:
+            logger.error("FEL 403: Token saknar behörighet. Gå till GitHub -> Tokens -> Kryssa i 'workflow'!")
+            return jsonify({"success": False, "message": "Token saknar 'workflow' behörighet"}), 403
         else:
             logger.error(f"GitHub API Fel {res.status_code}: {res.text}")
             return jsonify({"success": False, "message": f"API Fel: {res.status_code}"}), res.status_code
