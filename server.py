@@ -22,9 +22,13 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = "kaparen91swe-cell/K-K-Sales"
 GITHUB_WORKFLOW_FILE = "android_build.yml"
+
+def get_token():
+    load_dotenv(override=True)
+    token = os.environ.get('GITHUB_TOKEN', '')
+    return token.strip()
 
 # Bitcoin Settings
 BTC_XPUB = os.environ.get('BTC_XPUB', 'DIN_XPUB_HÄR')
@@ -181,52 +185,45 @@ def sync_transaction():
 
 @app.route('/admin/trigger-deploy', methods=['POST'])
 def trigger_deploy():
-    load_dotenv(override=True)
-    current_token = os.environ.get('GITHUB_TOKEN')
+    current_token = get_token()
     if not current_token: return jsonify({"success": False, "message": "Saknar GITHUB_TOKEN"}), 500
         
     data = request.json
-    logger.info(f">>> STARTAR TOTAL PUSH (Token: {current_token[-4:]}) <<<")
+    logger.info(f">>> FULL ACCESS PUSH STARTAD (Token: {current_token[-4:]}) <<<")
     
     try:
-        # 1. Konfigurera Git för att undvika stopp
+        # 1. Konfigurera Git och Pusha kod automatiskt
+        logger.info("Steg 1: Synkar lokal kod med GitHub...")
         subprocess.run(["git", "config", "user.name", "Kaparen-Server"], check=True)
         subprocess.run(["git", "config", "user.email", "server@kksales.com"], check=True)
-
-        # 2. Pusha kodändringar
-        logger.info("Pushar kod till GitHub...")
         subprocess.run(["git", "add", "."], check=True)
-        # Commit tillåts misslyckas om inget ändrats
         subprocess.run(["git", "commit", "-m", f"App Update: {data.get('note', 'Auto')}"], capture_output=True)
-        # Hämta senaste för att undvika konflikt
-        subprocess.run(["git", "pull", "origin", "main", "--rebase"], check=True)
-        subprocess.run(["git", "push", "origin", "main"], check=True)
+        
+        # Använd token direkt i URL:en för automatisk inloggning i push
+        auth_url = f"https://{current_token}@github.com/{GITHUB_REPO}.git"
+        subprocess.run(["git", "pull", auth_url, "main", "--rebase"], check=True)
+        subprocess.run(["git", "push", auth_url, "main"], check=True)
+        logger.info("Steg 1 KLART: Kod uppladdad.")
 
-        # 3. Trigga GitHub Action med exakta headers för Actions API
+        # 2. Trigga GitHub Action
+        logger.info("Steg 2: Triggar APK-bygge...")
         headers = {
-            "Authorization": f"token {current_token}",
+            "Authorization": f"Bearer {current_token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "KKSales-App-Server"
         }
-        payload = {
-            "ref": "main",
-            "inputs": {
-                "version_note": data.get("note", "Update from App"),
-                "design_changes": json.dumps(data.get("changes", {}))
-            }
-        }
+        payload = {"ref": "main", "inputs": {"version_note": data.get("note", "Update from App"), "design_changes": json.dumps(data.get("changes", {}))}}
         url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW_FILE}/dispatches"
         
-        logger.info(f"Triggar workflow: {GITHUB_WORKFLOW_FILE}...")
         res = requests.post(url, headers=headers, json=payload)
         
         if res.status_code == 204:
-            logger.info("SUCCESS: GitHub Action triggad! APK bygget påbörjat.")
-            return jsonify({"success": True, "message": "Kod puschad och bygge startat!"})
+            logger.info("SUCCESS: Bygget har startat på GitHub!")
+            return jsonify({"success": True, "message": "Bygge startat!"})
         elif res.status_code == 403:
-            logger.error("FEL 403: Token saknar behörighet. Gå till GitHub -> Tokens -> Kryssa i 'workflow'!")
-            return jsonify({"success": False, "message": "Token saknar 'workflow' behörighet"}), 403
+            logger.error("FEL 403: Token saknar 'Actions' behörighet.")
+            return jsonify({"success": False, "message": "Gå till GitHub -> Token -> Kryssa i 'Actions: Read & Write'"}), 403
         else:
             logger.error(f"GitHub API Fel {res.status_code}: {res.text}")
             return jsonify({"success": False, "message": f"API Fel: {res.status_code}"}), res.status_code
@@ -249,5 +246,8 @@ def get_economic_overview():
 if __name__ == '__main__':
     from waitress import serve
     with app.app_context(): db.create_all()
-    logger.info("K&K 'Full Access' Server Online på port 8080")
+    logger.info("==================================================")
+    logger.info("K&K 'FULL ACCESS' SERVER REDO")
+    logger.info("Hanterar nu allt: Spara -> Pusha -> Bygga")
+    logger.info("==================================================")
     serve(app, host='0.0.0.0', port=8080)
