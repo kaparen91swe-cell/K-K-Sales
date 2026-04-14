@@ -11,26 +11,26 @@ android {
     namespace = "com.example.kksales"
     compileSdk = 35
 
+    // Robust versionshantering
+    val versionPropsFile = rootProject.file("version.properties")
+    val versionProps = Properties()
+    if (versionPropsFile.exists()) {
+        versionProps.load(versionPropsFile.inputStream())
+    } else {
+        versionProps.setProperty("VERSION_CODE", "1")
+        versionProps.setProperty("VERSION_NAME", "1.0.1")
+        versionProps.store(versionPropsFile.writer(), null)
+    }
+
+    var currentCode = versionProps.getProperty("VERSION_CODE").toInt()
+    
     defaultConfig {
         applicationId = "com.example.kksales"
         minSdk = 26
         targetSdk = 35
 
-        val versionPropsFile = rootProject.file("version.properties")
-        val versionProps = Properties()
-        if (versionPropsFile.exists()) {
-            versionProps.load(versionPropsFile.inputStream())
-        } else {
-            versionProps.setProperty("VERSION_CODE", "15")
-            versionProps.setProperty("VERSION_NAME", "1.0.15")
-            versionProps.store(versionPropsFile.writer(), null)
-        }
-
-        val code = versionProps.getProperty("VERSION_CODE").toInt()
-        val name = versionProps.getProperty("VERSION_NAME")
-
-        versionCode = code
-        versionName = name
+        versionCode = currentCode
+        versionName = "1.0.$currentCode"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         signingConfig = signingConfigs.getByName("debug")
@@ -49,30 +49,23 @@ android {
         }
     }
     
-    // Automatisk versionshantering vid bygge
+    // Automatisk versionshantering vid bygge - körs precis innan själva bygget
     gradle.taskGraph.whenReady {
         if (hasTask(":app:assembleDebug") || hasTask(":app:assembleRelease")) {
-            val versionPropsFile = rootProject.file("version.properties")
-            val versionProps = Properties()
-            versionProps.load(versionPropsFile.inputStream())
-            
-            val nextCode = versionProps.getProperty("VERSION_CODE").toInt() + 1
-            versionProps.setProperty("VERSION_CODE", nextCode.toString())
-            versionProps.setProperty("VERSION_NAME", "1.0.$nextCode")
-            versionProps.store(versionPropsFile.writer(), null)
-            
-            val releaseNoteFile = rootProject.file("latest_version.txt")
-            releaseNoteFile.writeText("Version: 1.0.$nextCode\nCode: $nextCode\nBuild Date: ${Date()}")
-
-            // Uppdatera även version.json automatiskt för GitHub
-            val versionJsonFile = rootProject.file("version.json")
-            val apkUrl = "https://github.com/kaparen91swe-cell/K-K-Sales/releases/download/v1.0.$nextCode/app-debug.apk"
-            versionJsonFile.writeText("""
-                {
-                  "versionCode": $nextCode,
-                  "apkUrl": "$apkUrl"
-                }
-            """.trimIndent())
+            val vFile = rootProject.file("version.properties")
+            val vProps = Properties()
+            if (vFile.exists()) {
+                vProps.load(vFile.inputStream())
+                val nextCode = vProps.getProperty("VERSION_CODE").toInt() + 1
+                vProps.setProperty("VERSION_CODE", nextCode.toString())
+                vProps.setProperty("VERSION_NAME", "1.0.$nextCode")
+                vProps.store(vFile.writer(), null)
+                
+                // Uppdatera även version.json automatiskt för GitHub
+                val versionJsonFile = rootProject.file("version.json")
+                val apkUrl = "https://github.com/kaparen91swe-cell/K-K-Sales/releases/download/v1.0.$nextCode/app-debug.apk"
+                versionJsonFile.writeText("{\n  \"versionCode\": $nextCode,\n  \"apkUrl\": \"$apkUrl\"\n}")
+            }
         }
     }
 
@@ -83,9 +76,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-        viewBinding = false
     }
-    buildToolsVersion = "37.0.0"
 }
 
 dependencies {
