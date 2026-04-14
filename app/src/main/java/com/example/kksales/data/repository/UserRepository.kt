@@ -51,6 +51,11 @@ class UserRepository(
     }
 
     suspend fun deleteUser(user: User) {
+        try {
+            apiService.deleteUser(user.id)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         userDao.deleteUser(user)
     }
 

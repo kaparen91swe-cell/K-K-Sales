@@ -252,8 +252,19 @@ class UserViewModel(
     }
 
     fun deleteUser(user: User) {
+        if (user.name == "Kaparen") {
+            viewModelScope.launch {
+                _toastMessage.emit("Kan inte radera Kaparen!")
+            }
+            return
+        }
         viewModelScope.launch {
-            userRepository.deleteUser(user)
+            try {
+                userRepository.deleteUser(user)
+                _toastMessage.emit("Användare ${user.name} raderad")
+            } catch (e: Exception) {
+                _toastMessage.emit("Fel vid radering: ${e.message}")
+            }
         }
     }
 

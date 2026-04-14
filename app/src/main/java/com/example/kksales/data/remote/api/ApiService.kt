@@ -20,6 +20,9 @@ interface ApiService {
     @PUT("users/{id}")
     suspend fun updateUser(@Path("id") id: Int, @Body user: com.example.kksales.data.local.entity.User)
 
+    @DELETE("users/{id}")
+    suspend fun deleteUser(@Path("id") id: Int)
+
     // Products
     @GET("products")
     suspend fun getAllProducts(): List<com.example.kksales.data.local.entity.Product>

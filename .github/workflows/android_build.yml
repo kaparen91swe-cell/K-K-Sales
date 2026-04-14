@@ -12,6 +12,9 @@ on:
         required: false
         default: '{}'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,8 +39,6 @@ jobs:
 
       - name: Apply Design Changes
         run: |
-          echo '${{ github.event.inputs.design_changes }}' > app/src/main/assets/design_config.json
-          # If assets dir doesn't exist, create it
           mkdir -p app/src/main/assets
           echo '${{ github.event.inputs.design_changes }}' > app/src/main/assets/design_config.json
 
@@ -58,14 +59,14 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add version.properties version.json app/src/main/assets/design_config.json
-          git commit -m "chore: update version to $VERSION_NAME [skip ci]" || echo "No changes to commit"
+          git commit -m "chore: update version to ${{ env.VERSION_NAME }} [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ env.VERSION_CODE }}
-          name: Release 1.0.${{ env.VERSION_CODE }}
+          tag_name: v${{ env.VERSION_NAME }}
+          name: Release ${{ env.VERSION_NAME }}
           body: ${{ github.event.inputs.version_note }}
           files: app/build/outputs/apk/debug/app-debug.apk
           token: ${{ secrets.GITHUB_TOKEN }}

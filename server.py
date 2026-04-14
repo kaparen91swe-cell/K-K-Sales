@@ -196,7 +196,9 @@ def register():
 
 @app.route('/users/<int:id>', methods=['PUT'])
 def update_user(id):
-    user = User.query.get_or_404(id)
+    user = db.session.get(User, id)
+    if not user:
+        return jsonify({"success": False, "message": "User not found"}), 404
     data = request.json
     for key, value in data.items():
         if key in ['productCommissions', 'productResellerPrices']:
@@ -206,6 +208,18 @@ def update_user(id):
     db.session.commit()
     return jsonify({"success": True})
 
+@app.route('/users/<int:id>', methods=['DELETE'])
+def delete_user(id):
+    user = db.session.get(User, id)
+    if user:
+        # Delete related data
+        Transaction.query.filter_by(userId=id).delete()
+        Payment.query.filter_by(userId=id).delete()
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Användare raderad"})
+    return jsonify({"success": False, "message": "Användare hittades inte"}), 404
+
 @app.route('/products', methods=['GET'])
 def get_products():
     prods = Product.query.all()
@@ -214,7 +228,7 @@ def get_products():
 @app.route('/products', methods=['POST'])
 def sync_product():
     data = request.json
-    prod = Product.query.get(data['id'])
+    prod = db.session.get(Product, data['id'])
     if not prod:
         prod = Product(id=data['id'])
         db.session.add(prod)
@@ -303,7 +317,9 @@ def create_btc_payment():
 
 @app.route('/payments/btc/check/<int:payment_id>', methods=['GET'])
 def check_btc_payment(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
+    payment = db.session.get(Payment, payment_id)
+    if not payment:
+        return jsonify({"success": False, "message": "Payment not found"}), 404
     return jsonify(payment.to_dict())
 
 @app.route('/admin/trigger-deploy', methods=['POST'])
