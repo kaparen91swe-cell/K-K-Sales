@@ -187,7 +187,7 @@ fun ProductItem(product: Product, onOrder: (Int, String) -> Unit) {
             ) {
                 Icon(Icons.Rounded.AddShoppingCart, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.action_add_to_cart))
+                Text(if (product.quantity > 0) stringResource(R.string.action_add_to_cart) else "Slut i lager")
             }
         }
     }
