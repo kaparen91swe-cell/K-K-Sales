@@ -4,24 +4,54 @@ import json
 import time
 import os
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-# Set these in your environment or a .env file
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', 'YOUR_GITHUB_TOKEN_HERE')
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = "kaparen91swe-cell/K-K-Sales"
-GITHUB_WORKFLOW_FILE = "android_build.yml" # The name of your workflow file
+GITHUB_WORKFLOW_FILE = "android_build.yml"
 
-# Databas-konfiguration
-# Skapar en fil som heter kksales_online.db
+# Bitcoin Settings
+BTC_XPUB = os.environ.get('BTC_XPUB', 'DIN_XPUB_HÄR')
+BTC_WALLET_ADDRESS = os.environ.get('BTC_WALLET_ADDRESS', 'DIN_BTC_ADRESS_HÄR')
+
+if not GITHUB_TOKEN:
+    print("WARNING: GITHUB_TOKEN environment variable is not set!")
+    print("GitHub deployment features will not work.")
+
+# Database Configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'kksales_online.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- DATABASMODELLER ---
+# --- DATABASE MODELS ---
+
+class Payment(db.Model):
+    __tablename__ = 'payments'
+    id = db.Column(db.Integer, primary_key=True)
+    userId = db.Column(db.Integer)
+    amount_sek = db.Column(db.Float)
+    amount_btc = db.Column(db.Float)
+    address = db.Column(db.String(100))
+    status = db.Column(db.String(50), default='pending') # pending, confirmed, failed
+    timestamp = db.Column(db.BigInteger)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "userId": self.userId,
+            "amount_sek": self.amount_sek,
+            "amount_btc": self.amount_btc,
+            "address": self.address,
+            "status": self.status,
+            "timestamp": self.timestamp
+        }
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -39,13 +69,11 @@ class User(db.Model):
     profileIcon = db.Column(db.String(100))
     vehicleType = db.Column(db.String(100))
     
-    # Bränsle & Logistik
     fuelPrice = db.Column(db.Float)
     fuelConsumption = db.Column(db.Float)
     vehicleBonusPerUnit = db.Column(db.Float)
     vehicleFeePerUnit = db.Column(db.Float)
     
-    # Sparas som JSON-strängar
     productCommissions = db.Column(db.Text, default='{}')
     productResellerPrices = db.Column(db.Text, default='{}')
 
@@ -105,6 +133,8 @@ class Transaction(db.Model):
     userId = db.Column(db.Integer)
     productId = db.Column(db.Integer)
     amount = db.Column(db.Float)
+    vatAmount = db.Column(db.Float, default=0.0)
+    vatRate = db.Column(db.Float, default=0.0)
     quantity = db.Column(db.Integer, default=0)
     timestamp = db.Column(db.BigInteger)
     category = db.Column(db.String(100))
@@ -118,6 +148,8 @@ class Transaction(db.Model):
             "userId": self.userId,
             "productId": self.productId,
             "amount": self.amount,
+            "vatAmount": self.vatAmount,
+            "vatRate": self.vatRate,
             "quantity": self.quantity,
             "timestamp": self.timestamp,
             "category": self.category,
@@ -132,7 +164,6 @@ class Transaction(db.Model):
 def get_status():
     return jsonify({"status": "online", "time": int(time.time() * 1000)})
 
-# Användare
 @app.route('/users', methods=['GET'])
 def get_users():
     users = User.query.all()
@@ -175,7 +206,6 @@ def update_user(id):
     db.session.commit()
     return jsonify({"success": True})
 
-# Produkter
 @app.route('/products', methods=['GET'])
 def get_products():
     prods = Product.query.all()
@@ -200,7 +230,6 @@ def sync_product():
     db.session.commit()
     return jsonify({"success": True})
 
-# Transaktioner
 @app.route('/transactions', methods=['GET'])
 def get_transactions():
     transactions = Transaction.query.all()
@@ -213,6 +242,8 @@ def sync_transaction():
         userId=data['userId'],
         productId=data['productId'],
         amount=data['amount'],
+        vatAmount=data.get('vatAmount', 0.0),
+        vatRate=data.get('vatRate', 0.0),
         quantity=data.get('quantity', 0),
         timestamp=data['timestamp'],
         category=data.get('category'),
@@ -228,32 +259,67 @@ def sync_transaction():
 def process_order():
     return jsonify({"success": True, "message": "Order mottagen av K&K Server"})
 
-# --- ADMIN / DEVELOPER MODE ENDPOINTS ---
+@app.route('/payments/btc/price', methods=['GET'])
+def get_btc_price():
+    try:
+        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=sek")
+        data = response.json()
+        return jsonify({"price_sek": data['bitcoin']['sek']})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/payments/btc/create', methods=['POST'])
+def create_btc_payment():
+    data = request.json
+    userId = data.get('userId')
+    amount_sek = data.get('amount_sek')
+    
+    try:
+        price_response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=sek")
+        btc_price = price_response.json()['bitcoin']['sek']
+        amount_btc = amount_sek / btc_price
+    except:
+        return jsonify({"error": "Kunde inte hämta BTC-pris"}), 500
+
+    address = BTC_WALLET_ADDRESS
+    
+    new_payment = Payment(
+        userId=userId,
+        amount_sek=amount_sek,
+        amount_btc=amount_btc,
+        address=address,
+        status='pending',
+        timestamp=int(time.time() * 1000)
+    )
+    db.session.add(new_payment)
+    db.session.commit()
+    
+    return jsonify({
+        "payment_id": new_payment.id,
+        "address": address,
+        "amount_btc": f"{amount_btc:.8f}",
+        "amount_sek": amount_sek
+    })
+
+@app.route('/payments/btc/check/<int:payment_id>', methods=['GET'])
+def check_btc_payment(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    return jsonify(payment.to_dict())
 
 @app.route('/admin/trigger-deploy', methods=['POST'])
 def trigger_deploy():
-    """
-    Triggers a GitHub Action to rebuild the APK and update version.json.
-    Expects JSON data with design changes or simple confirmation.
-    """
     data = request.json
-    
-    # Headers for GitHub API
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
-    
-    # Trigger workflow_dispatch event
-    # You can pass design changes as inputs to the workflow
     payload = {
-        "ref": "main", # Or the branch you want to build from
+        "ref": "main",
         "inputs": {
             "version_note": data.get("note", "Manual update from app"),
             "design_changes": json.dumps(data.get("changes", {}))
         }
     }
-    
     url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW_FILE}/dispatches"
     
     try:

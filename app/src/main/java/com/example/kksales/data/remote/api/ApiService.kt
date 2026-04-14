@@ -37,12 +37,47 @@ interface ApiService {
     @POST("orders/process")
     suspend fun processOrder(@Body orderRequest: OrderRequest): OrderResponse
 
+    @POST("admin/trigger-deploy")
+    suspend fun triggerDeploy(@Body request: DeployRequest): DeployResponse
+
     @GET("status")
     suspend fun getServerStatus(): Map<String, String>
+
+    // Bitcoin Payments
+    @GET("payments/btc/price")
+    suspend fun getBtcPrice(): BtcPriceResponse
+
+    @POST("payments/btc/create")
+    suspend fun createBtcPayment(@Body request: BtcPaymentRequest): BtcPaymentResponse
+
+    @GET("payments/btc/check/{id}")
+    suspend fun checkBtcPayment(@Path("id") id: Int): BtcPaymentStatusResponse
 
     @GET
     suspend fun checkUpdate(@Url url: String): UpdateInfo
 }
+
+@JsonClass(generateAdapter = true)
+data class BtcPriceResponse(val price_sek: Double)
+
+@JsonClass(generateAdapter = true)
+data class BtcPaymentRequest(val userId: Int, val amount_sek: Double)
+
+@JsonClass(generateAdapter = true)
+data class BtcPaymentResponse(
+    val payment_id: Int,
+    val address: String,
+    val amount_btc: String,
+    val amount_sek: Double
+)
+
+@JsonClass(generateAdapter = true)
+data class BtcPaymentStatusResponse(
+    val id: Int,
+    val status: String, // pending, confirmed, failed
+    val amount_btc: Double,
+    val address: String
+)
 
 @JsonClass(generateAdapter = true)
 data class UpdateInfo(
@@ -65,4 +100,17 @@ data class OrderResponse(
     val success: Boolean,
     val message: String,
     val transactionId: Int? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class DeployRequest(
+    val note: String,
+    val changes: Map<String, Any> = emptyMap()
+)
+
+@JsonClass(generateAdapter = true)
+data class DeployResponse(
+    val success: Boolean,
+    val message: String,
+    val error: String? = null
 )

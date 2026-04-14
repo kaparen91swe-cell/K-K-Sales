@@ -66,9 +66,57 @@ class CatalogViewModel(
 
     private suspend fun seedDefaultProducts() {
         val defaultProducts = listOf(
-            Product(name = "Product A", unitCost = 5.0, salesPrice = 10.0, quantity = 50),
-            Product(name = "Product B", unitCost = 10.0, salesPrice = 20.0, quantity = 30),
-            Product(name = "Product C", unitCost = 2.0, salesPrice = 5.0, quantity = 100)
+            Product(
+                name = "❄️DUNDER KOLA❄️ Coke", 
+                unitCost = 400.0, 
+                salesPrice = 800.0, 
+                profitPerUnit = 150.0, 
+                resellerPrice = 650.0, 
+                quantity = 50, 
+                unit = "g", 
+                lowStockThreshold = 10,
+                bulkPrices = listOf(
+                    com.example.kksales.data.local.entity.BulkPrice(2, 1500.0),
+                    com.example.kksales.data.local.entity.BulkPrice(3, 2100.0),
+                    com.example.kksales.data.local.entity.BulkPrice(5, 3000.0),
+                    com.example.kksales.data.local.entity.BulkPrice(10, 5500.0),
+                    com.example.kksales.data.local.entity.BulkPrice(25, 12500.0)
+                )
+            ),
+            Product(
+                name = "⚡👞 Tjack 👞⚡ Amphetamine", 
+                unitCost = 30.0, 
+                salesPrice = 140.0, 
+                profitPerUnit = 40.0, 
+                resellerPrice = 100.0, 
+                quantity = 1000, 
+                unit = "g", 
+                lowStockThreshold = 100,
+                bulkPrices = listOf(
+                    com.example.kksales.data.local.entity.BulkPrice(5, 700.0),
+                    com.example.kksales.data.local.entity.BulkPrice(10, 1100.0),
+                    com.example.kksales.data.local.entity.BulkPrice(50, 2500.0),
+                    com.example.kksales.data.local.entity.BulkPrice(100, 4500.0),
+                    com.example.kksales.data.local.entity.BulkPrice(200, 8000.0),
+                    com.example.kksales.data.local.entity.BulkPrice(500, 16000.0)
+                )
+            ),
+            Product(
+                name = "🍫Hash🍫 Dry Sift (OG Kush)", 
+                unitCost = 50.0,
+                salesPrice = 125.0, 
+                profitPerUnit = 25.0, 
+                resellerPrice = 100.0, 
+                quantity = 500, 
+                unit = "g", 
+                lowStockThreshold = 50,
+                bulkPrices = listOf(
+                    com.example.kksales.data.local.entity.BulkPrice(4, 500.0),
+                    com.example.kksales.data.local.entity.BulkPrice(25, 2500.0),
+                    com.example.kksales.data.local.entity.BulkPrice(50, 4000.0),
+                    com.example.kksales.data.local.entity.BulkPrice(100, 7500.0)
+                )
+            )
         )
         defaultProducts.forEach { productRepository.insertProduct(it) }
     }
@@ -111,11 +159,26 @@ class CatalogViewModel(
         }
     }
 
+    private val _btcPayment = MutableStateFlow<com.example.kksales.data.remote.api.BtcPaymentResponse?>(null)
+    val btcPayment = _btcPayment.asStateFlow()
+
     fun checkout(paymentMethod: String, receiverId: Int? = null) {
         viewModelScope.launch {
             val userId = userPreferencesManager.currentUserId.first() ?: return@launch
             val items = cartItems.value
             if (items.isEmpty()) return@launch
+
+            if (paymentMethod == "Bitcoin") {
+                try {
+                    val response = userRepository.apiService.createBtcPayment(
+                        com.example.kksales.data.remote.api.BtcPaymentRequest(userId, cartTotal.value)
+                    )
+                    _btcPayment.value = response
+                } catch (e: Exception) {
+                    _orderResult.emit(Result.failure(Exception("BTC-betalning misslyckades: ${e.message}")))
+                }
+                return@launch
+            }
 
             var anySuccess = false
             var errorMessage = ""

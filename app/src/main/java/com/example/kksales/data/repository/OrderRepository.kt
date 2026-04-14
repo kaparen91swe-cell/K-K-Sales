@@ -136,7 +136,7 @@ class OrderRepository(
                 type = TransactionType.INCOME,
                 paymentMethod = paymentMethod,
                 receiverId = receiverId,
-                description = "Försäljning av ${product.name} ($quantity $product.unit)"
+                description = "Försäljning: ${product.name} ${if (quantity >= 1000) "${quantity / 1000}kg" else if (quantity >= 100) "${quantity / 100}hg" else "${quantity}g"}"
             )
             transactionDao.insertTransaction(transaction)
 

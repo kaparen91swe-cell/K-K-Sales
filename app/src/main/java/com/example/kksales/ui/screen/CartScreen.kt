@@ -1,5 +1,6 @@
 package com.example.kksales.ui.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +35,7 @@ fun CartScreen(
     val cartItems by viewModel.cartItems.collectAsState()
     val products by viewModel.products.collectAsState()
     val totalAmount by viewModel.cartTotal.collectAsState()
+    val btcPayment by viewModel.btcPayment.collectAsState()
     
     var showCheckoutDialog by remember { mutableStateOf(false) }
 
@@ -64,7 +67,7 @@ fun CartScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Totalt:",
+                                text = stringResource(R.string.label_total_cost),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -128,6 +131,91 @@ fun CartScreen(
             }
         )
     }
+
+    btcPayment?.let { payment ->
+        BitcoinPaymentDialog(
+            payment = payment,
+            onDismiss = { /* Handle dismiss */ },
+            onConfirm = {
+                // Here we would normally wait for server confirmation
+                // For now, let's just clear the cart and assume it's pending
+                viewModel.clearCartAndRestoreStock() 
+            }
+        )
+    }
+}
+
+@Composable
+fun BitcoinPaymentDialog(
+    payment: com.example.kksales.data.remote.api.BtcPaymentResponse,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.label_btc_payment)) },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Skanna QR-koden eller kopiera adressen nedan",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // QR Code Placeholder - In a real app we would use ZXing to generate a QR
+                Box(
+                    modifier = Modifier
+                        .size(200.dp)
+                        .background(Color.White, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Simulating a QR code with an icon for now
+                    Icon(
+                        Icons.Rounded.Payments, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(100.dp),
+                        tint = Color.Black
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    "Belopp: ${payment.amount_btc} BTC",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "(${payment.amount_sek} ${stringResource(R.string.currency_symbol)})",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = payment.address,
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Jag har skickat betalningen")
+            }
+        }
+    )
 }
 
 @Composable
@@ -192,24 +280,28 @@ fun CheckoutDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, Int?) -> Unit
 ) {
-    var selectedMethod by remember { mutableStateOf("Kontant") }
+    val methodCash = stringResource(R.string.label_cash_payment)
+    val methodBalance = stringResource(R.string.label_balance_payment)
+    val methodBtc = stringResource(R.string.label_btc_payment)
+    
+    var selectedMethod by remember { mutableStateOf(methodCash) }
     var selectedAdminId by remember { mutableStateOf<Int?>(null) }
     
-    val paymentMethods = listOf("Kontant", "Konto")
+    val paymentMethods = listOf(methodCash, methodBalance, methodBtc)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Kassa - Betalning") },
+        title = { Text(stringResource(R.string.title_checkout)) },
         text = {
             Column {
                 Text(
-                    text = "Att betala: ${stringResource(R.string.currency_symbol)}${String.format("%.2f", totalAmount)}",
+                    text = "${stringResource(R.string.label_total)}: ${stringResource(R.string.currency_symbol)}${String.format("%.2f", totalAmount)}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 
-                Text("Välj betalsätt:", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.label_payment_method), style = MaterialTheme.typography.titleMedium)
                 
                 paymentMethods.forEach { method ->
                     Row(
@@ -229,9 +321,9 @@ fun CheckoutDialog(
                     }
                 }
 
-                if (selectedMethod == "Kontant") {
+                if (selectedMethod == methodCash) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Vem tar emot pengarna?", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.label_assign_to), style = MaterialTheme.typography.titleSmall)
                     
                     admins.forEach { admin ->
                         Row(
@@ -255,10 +347,10 @@ fun CheckoutDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(selectedMethod, if (selectedMethod == "Kontant") selectedAdminId else null) },
-                enabled = selectedMethod != "Kontant" || selectedAdminId != null
+                onClick = { onConfirm(selectedMethod, if (selectedMethod == methodCash) selectedAdminId else null) },
+                enabled = selectedMethod != methodCash || selectedAdminId != null
             ) {
-                Text("Slutför köp")
+                Text(stringResource(R.string.action_checkout))
             }
         },
         dismissButton = {

@@ -9,6 +9,11 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,12 +29,14 @@ import coil.compose.AsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.example.kksales.data.local.entity.formatQuantity
+
+import com.example.kksales.util.FileUtils
+import android.net.Uri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,10 +44,19 @@ fun AdminDashboardScreen(viewModel: AdminViewModel) {
     val products by viewModel.products.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var productToEdit by remember { mutableStateOf<Product?>(null) }
+    var showImageManager by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.title_inventory)) })
+            TopAppBar(
+                title = { Text(stringResource(R.string.title_inventory)) },
+                actions = {
+                    IconButton(onClick = { showImageManager = true }) {
+                        Icon(Icons.Rounded.FolderOpen, contentDescription = "Hantera alla produktbilder")
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
@@ -64,11 +80,19 @@ fun AdminDashboardScreen(viewModel: AdminViewModel) {
             }
         }
 
+        if (showImageManager) {
+            AdminImageManagerDialog(onDismiss = { showImageManager = false })
+        }
+
         if (showAddDialog) {
             ProductDialog(
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, cost, price, qty, unit, imageUri, bulkPrices, threshold ->
-                    viewModel.addProduct(name, cost, price, qty, unit, imageUri, bulkPrices, threshold)
+                onConfirm = { name, cost, price, profit, qty, unit, imageUri, bulkPrices, threshold ->
+                    val savedUri = imageUri?.let { uriStr ->
+                        FileUtils.saveImageToInternalStorage(context, Uri.parse(uriStr))
+                    } ?: imageUri
+                    
+                    viewModel.addProduct(name, cost, price, profit, qty, unit, savedUri, bulkPrices, threshold)
                     showAddDialog = false
                 }
             )
@@ -78,14 +102,22 @@ fun AdminDashboardScreen(viewModel: AdminViewModel) {
             ProductDialog(
                 product = product,
                 onDismiss = { productToEdit = null },
-                onConfirm = { name, cost, price, qty, unit, imageUri, bulkPrices, threshold ->
+                onConfirm = { name, cost, price, profit, qty, unit, imageUri, bulkPrices, threshold ->
+                    val savedUri = if (imageUri != null && imageUri != product.imageUri) {
+                        FileUtils.saveImageToInternalStorage(context, Uri.parse(imageUri))
+                    } else {
+                        imageUri
+                    }
+
                     viewModel.updateProduct(product.copy(
                         name = name, 
                         unitCost = cost, 
                         salesPrice = price, 
+                        profitPerUnit = profit,
+                        resellerPrice = price - profit,
                         quantity = qty, 
                         unit = unit,
-                        imageUri = imageUri,
+                        imageUri = savedUri,
                         bulkPrices = bulkPrices,
                         lowStockThreshold = threshold
                     ))
@@ -122,7 +154,7 @@ fun AdminProductItem(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = product.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(text = stringResource(R.string.label_cost_price, String.format("%.2f", product.unitCost), String.format("%.2f", product.salesPrice)))
+                Text(text = stringResource(R.string.label_cost_price, String.format(java.util.Locale.getDefault(), "%.2f", product.unitCost), String.format(java.util.Locale.getDefault(), "%.2f", product.salesPrice)))
                 Text(text = "Lager: ${product.formatQuantity()}", color = MaterialTheme.colorScheme.secondary)
                 if (product.bulkPrices.isNotEmpty()) {
                     Text("Rabatter: ${product.bulkPrices.size} st", style = MaterialTheme.typography.bodySmall)
@@ -194,14 +226,64 @@ private fun formatGrams(grams: Int): String {
 }
 
 @Composable
+fun AdminImageManagerDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var images by remember { mutableStateOf(FileUtils.getAllProductImageUris(context)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mapp: Sparade Produktbilder") },
+        text = {
+            if (images.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    Text("Ingen bild sparad i mappen")
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxHeight(0.6f)) {
+                    items(images) { uri ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(4.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Bild_${uri.takeLast(10)}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            IconButton(onClick = {
+                                FileUtils.deleteImageFromInternalStorage(uri)
+                                images = FileUtils.getAllProductImageUris(context)
+                            }) {
+                                Icon(Icons.Rounded.Delete, "Radera permanent", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text("Stäng mapp") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun ProductDialog(
     product: Product? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, Double, Double, Int, String, String?, List<BulkPrice>, Int) -> Unit
+    onConfirm: (String, Double, Double, Double, Int, String, String?, List<BulkPrice>, Int) -> Unit
 ) {
     var name by remember { mutableStateOf(product?.name ?: "") }
     var unitCost by remember { mutableStateOf(product?.unitCost?.toString() ?: "") }
     var salesPrice by remember { mutableStateOf(product?.salesPrice?.toString() ?: "") }
+    var profitPerUnit by remember { mutableStateOf(product?.profitPerUnit?.toString() ?: "") }
+    
+    // Beräkna provision till säljaren automatiskt för visning
+    val costNum = unitCost.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val salesNum = salesPrice.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val profitNum = profitPerUnit.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val commissionToReseller = if (salesNum > 0) salesNum - costNum - profitNum else 0.0
     
     val weightUnits = listOf("g", "hg", "kg")
     val allPossibleUnits = listOf("st", "kg", "g", "hg", "l", "dl", "cl", "förp")
@@ -221,20 +303,60 @@ fun ProductDialog(
     var thresholdUnit by remember { mutableStateOf(initialThreshold.second) }
 
     var imageUri by remember { mutableStateOf(product?.imageUri) }
-    
-    // Multiple bulk prices
+    var showImageSourcePicker by remember { mutableStateOf(false) }
+    var expandedBaseUnit by remember { mutableStateOf(false) }
     var bulkPrices by remember { mutableStateOf(product?.bulkPrices ?: emptyList()) }
     var editingBulkPrice by remember { mutableStateOf<BulkPrice?>(null) }
     var newBulkQty by remember { mutableStateOf("") }
-    var newBulkUnit by remember { mutableStateOf(if (isWeight) "g" else baseUnit) }
+    var newBulkUnit by remember { mutableStateOf(baseUnit) }
     var newBulkPrice by remember { mutableStateOf("") }
 
-    var expandedBaseUnit by remember { mutableStateOf(false) }
-
-    val launcher = rememberLauncherForActivityResult(
+    val context = LocalContext.current
+    val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         imageUri = uri?.toString()
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            // Spara bitmap till en temporär fil för att få en URI
+            val tempFile = java.io.File(context.cacheDir, "temp_camera_image_${System.currentTimeMillis()}.jpg")
+            java.io.FileOutputStream(tempFile).use { out ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            imageUri = Uri.fromFile(tempFile).toString()
+        }
+    }
+
+    if (showImageSourcePicker) {
+        AlertDialog(
+            onDismissRequest = { showImageSourcePicker = false },
+            title = { Text("Välj bildkälla") },
+            text = {
+                Column {
+                    ListItem(
+                        headlineContent = { Text("Kamera") },
+                        leadingContent = { Icon(Icons.Rounded.PhotoCamera, null) },
+                        modifier = Modifier.clickable { 
+                            cameraLauncher.launch(null)
+                            showImageSourcePicker = false 
+                        }
+                    )
+                    ListItem(
+                        headlineContent = { Text("Galleri") },
+                        leadingContent = { Icon(Icons.Rounded.PhotoLibrary, null) },
+                        modifier = Modifier.clickable { 
+                            imagePickerLauncher.launch("image/*")
+                            showImageSourcePicker = false 
+                        }
+                    )
+                }
+            },
+            confirmButton = {}
+        )
     }
 
     AlertDialog(
@@ -248,7 +370,7 @@ fun ProductDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(120.dp)
-                            .clickable { launcher.launch("image/*") },
+                            .clickable { showImageSourcePicker = true },
                         contentAlignment = Alignment.Center
                     ) {
                         if (imageUri != null) {
@@ -303,6 +425,27 @@ fun ProductDialog(
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         TextField(
+                            value = profitPerUnit, 
+                            onValueChange = { profitPerUnit = it }, 
+                            label = { Text("Vinst firma (kr/enhet)") }, 
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Säljarprovision", style = MaterialTheme.typography.labelSmall)
+                                Text("${String.format(java.util.Locale.getDefault(), "%.2f", commissionToReseller)} kr", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
                             value = quantityStr, 
                             onValueChange = { quantityStr = it }, 
                             label = { Text("Lagersaldo") }, 
@@ -335,7 +478,7 @@ fun ProductDialog(
                 }
                 
                 item {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text("Rabattstegar", style = MaterialTheme.typography.titleSmall)
                 }
 
@@ -429,8 +572,9 @@ fun ProductDialog(
                 
                 onConfirm(
                     name,
-                    unitCost.toDoubleOrNull() ?: 0.0,
-                    salesPrice.toDoubleOrNull() ?: 0.0,
+                    unitCost.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                    salesPrice.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                    profitPerUnit.replace(",", ".").toDoubleOrNull() ?: 0.0,
                     finalQty,
                     finalUnit,
                     imageUri,

@@ -34,6 +34,9 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.ui.res.painterResource
+import com.example.kksales.R
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(viewModel: ChatViewModel) {
@@ -81,6 +84,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
                         lastMessage = "Gruppmeddelande",
                         timestamp = "",
                         isGroup = true,
+                        profileIcon = null,
                         onClick = { activeConversationGroup = group }
                     )
                 }
@@ -94,6 +98,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
                         lastMessage = "Tryck för att chatta",
                         timestamp = "",
                         isGroup = false,
+                        profileIcon = user.profileIcon,
                         onClick = { activeConversationUser = user }
                     )
                 }
@@ -107,13 +112,14 @@ fun ChatScreen(viewModel: ChatViewModel) {
             exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
         ) {
             val title = activeConversationUser?.name ?: activeConversationGroup?.name ?: ""
+            val icon = activeConversationUser?.profileIcon
             
             Scaffold(
                 topBar = {
                     TopAppBar(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                AvatarCircle(name = title, size = 36.dp)
+                                AvatarCircle(name = title, isGroup = activeConversationGroup != null, profileIcon = icon, size = 36.dp)
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(title, style = MaterialTheme.typography.titleMedium)
                             }
@@ -154,7 +160,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
 }
 
 @Composable
-fun ConversationItem(title: String, lastMessage: String, timestamp: String, isGroup: Boolean, onClick: () -> Unit) {
+fun ConversationItem(title: String, lastMessage: String, timestamp: String, isGroup: Boolean, profileIcon: String?, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -162,7 +168,7 @@ fun ConversationItem(title: String, lastMessage: String, timestamp: String, isGr
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AvatarCircle(name = title, isGroup = isGroup)
+        AvatarCircle(name = title, isGroup = isGroup, profileIcon = profileIcon)
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -181,7 +187,7 @@ fun ConversationItem(title: String, lastMessage: String, timestamp: String, isGr
 }
 
 @Composable
-fun AvatarCircle(name: String, isGroup: Boolean = false, size: androidx.compose.ui.unit.Dp = 48.dp) {
+fun AvatarCircle(name: String, isGroup: Boolean = false, profileIcon: String? = null, size: androidx.compose.ui.unit.Dp = 48.dp) {
     val backgroundColor = remember(name) {
         val colors = listOf(Color(0xFF2196F3), Color(0xFFE91E63), Color(0xFF4CAF50), Color(0xFFFF9800), Color(0xFF9C27B0))
         colors[name.length % colors.size]
@@ -196,6 +202,45 @@ fun AvatarCircle(name: String, isGroup: Boolean = false, size: androidx.compose.
     ) {
         if (isGroup) {
             Icon(Icons.Rounded.Groups, null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
+        } else if (profileIcon != null) {
+            val iconRes = when (profileIcon) {
+                "boss_bulldog_1" -> R.drawable.boss_bulldog_1
+                "boss_bulldog_2" -> R.drawable.boss_bulldog_2
+                "boss_bulldog_3" -> R.drawable.boss_bulldog_3
+                "boss_bulldog_4" -> R.drawable.boss_bulldog_4
+                "reseller_rasta_1" -> R.drawable.reseller_rasta_1
+                "reseller_rasta_2" -> R.drawable.reseller_rasta_2
+                "reseller_rasta_3" -> R.drawable.reseller_rasta_3
+                "reseller_rasta_4" -> R.drawable.reseller_rasta_4
+                "reseller_rasta_5" -> R.drawable.reseller_rasta_5
+                "reseller_sales_1" -> R.drawable.reseller_sales_1
+                "reseller_sales_2" -> R.drawable.reseller_sales_2
+                "reseller_sales_3" -> R.drawable.reseller_sales_3
+                "reseller_sales_4" -> R.drawable.reseller_sales_4
+                "reseller_sales_5" -> R.drawable.reseller_sales_5
+                "reseller_sales_6" -> R.drawable.reseller_sales_6
+                "transporter_jah_1" -> R.drawable.transporter_jah_1
+                "transporter_jah_2" -> R.drawable.transporter_jah_2
+                "transporter_north_1" -> R.drawable.transporter_north_1
+                "transporter_express_1" -> R.drawable.transporter_express_1
+                else -> null
+            }
+            
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    tint = Color.Unspecified
+                )
+            } else {
+                Text(
+                    text = name.take(1).uppercase(),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (size.value * 0.4f).sp
+                )
+            }
         } else {
             Text(
                 text = name.take(1).uppercase(),

@@ -2,7 +2,9 @@ package com.example.kksales.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(tableName = "products")
 data class Product(
     @PrimaryKey(autoGenerate = true)
@@ -10,7 +12,8 @@ data class Product(
     val name: String,
     val unitCost: Double,
     val salesPrice: Double,
-    val resellerPrice: Double = 0.0, // Pris som säljaren betalar till Admin
+    val profitPerUnit: Double = 0.0, // Den vinst firman ska ha per enhet
+    val resellerPrice: Double = 0.0, // Pris som säljaren betalar till Admin (beräknas nu)
     val quantity: Int, // Sparas alltid i Gram (g)
     val unit: String = "g",
     val imageUri: String? = null,
@@ -34,9 +37,11 @@ fun Product.formatQuantity(): String {
     return parts.joinToString(" ")
 }
 
-fun Product.calculatePrice(quantity: Int): Double {
+fun Product.calculatePrice(quantity: Int, basePrice: Double? = null): Double {
+    val priceToUse = basePrice ?: salesPrice
+    
     if (bulkPrices.isEmpty()) {
-        return salesPrice * quantity
+        return priceToUse * quantity
     }
     
     var currentQuantity = quantity
@@ -44,6 +49,17 @@ fun Product.calculatePrice(quantity: Int): Double {
     
     val sortedBulkPrices = bulkPrices.sortedByDescending { it.quantity }
     
+    // If using a custom basePrice (reseller), we might want to scale bulk prices too, 
+    // but for now let's assume bulk prices are for customers and resellers pay unit price 
+    // UNLESS we are calculating for a customer.
+    // However, if basePrice is provided and differs from salesPrice, 
+    // it's likely a reseller calculation. 
+    
+    if (basePrice != null && basePrice != salesPrice) {
+        // Reseller unit price calculation (usually no bulk discount on top of reseller price)
+        return basePrice * quantity
+    }
+
     for (bp in sortedBulkPrices) {
         if (currentQuantity >= bp.quantity) {
             val bundles = currentQuantity / bp.quantity
@@ -52,5 +68,5 @@ fun Product.calculatePrice(quantity: Int): Double {
         }
     }
     
-    return currentTotal + (currentQuantity * salesPrice)
+    return currentTotal + (currentQuantity * priceToUse)
 }

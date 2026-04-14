@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
         AppSettings::class,
         Task::class
     ],
-    version = 16,
+    version = 22,
     exportSchema = false
 )
 @androidx.room.TypeConverters(Converters::class)
@@ -38,6 +38,20 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "kksales_db"
+
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Destructive migration will handle this if fallbackToDestructiveMigration is on,
+                // but we bump version to force a re-seed.
+            }
+        }
+
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Ingen ändring behövs i tabeller, vi ökade bara versionen för att tvinga Room att validera om.
+                // Eller om du faktiskt ändrat Product, lägg till kolumnen här.
+            }
+        }
 
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -61,6 +75,24 @@ abstract class AppDatabase : RoomDatabase() {
                 if (!hasVatRate) {
                     db.execSQL("ALTER TABLE transactions ADD COLUMN vatRate REAL NOT NULL DEFAULT 0.0")
                 }
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Safe migration to match the current schema and fix integrity hash issues
+            }
+        }
+
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN isDeveloperModeEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE users ADD COLUMN preferredFuelType TEXT")
             }
         }
 
@@ -100,8 +132,57 @@ abstract class AppDatabase : RoomDatabase() {
 
         private suspend fun seedDatabase(productDao: ProductDao) {
             val defaultProducts = listOf(
-                Product(name = "Standard Produkt 1", salesPrice = 100.0, resellerPrice = 80.0, quantity = 50, unit = "st", unitCost = 50.0),
-                Product(name = "Standard Produkt 2", salesPrice = 200.0, resellerPrice = 160.0, quantity = 30, unit = "st", unitCost = 100.0)
+                Product(
+                    name = "❄️DUNDER KOLA❄️ Coke", 
+                    unitCost = 400.0, 
+                    salesPrice = 800.0, 
+                    profitPerUnit = 150.0, 
+                    resellerPrice = 650.0, 
+                    quantity = 50, 
+                    unit = "g", 
+                    lowStockThreshold = 10,
+                    bulkPrices = listOf(
+                        BulkPrice(2, 1500.0),
+                        BulkPrice(3, 2100.0),
+                        BulkPrice(5, 3000.0),
+                        BulkPrice(10, 5500.0),
+                        BulkPrice(25, 12500.0)
+                    )
+                ),
+                Product(
+                    name = "⚡👞 Tjack 👞⚡ Amphetamine", 
+                    unitCost = 30.0, 
+                    salesPrice = 140.0, 
+                    profitPerUnit = 40.0, 
+                    resellerPrice = 100.0, 
+                    quantity = 1000, 
+                    unit = "g", 
+                    lowStockThreshold = 100,
+                    bulkPrices = listOf(
+                        BulkPrice(5, 700.0),
+                        BulkPrice(10, 1100.0),
+                        BulkPrice(50, 2500.0),
+                        BulkPrice(100, 4500.0),
+                        BulkPrice(200, 8000.0),
+                        BulkPrice(500, 16000.0)
+                    )
+                ),
+                Product(
+                    name = "🍫Hash🍫 Dry Sift (OG Kush)", 
+                    unitCost = 50.0,
+                    salesPrice = 125.0, 
+                    profitPerUnit = 25.0, 
+                    resellerPrice = 100.0, 
+                    quantity = 500, 
+                    unit = "g", 
+                    lowStockThreshold = 50,
+                    bulkPrices = listOf(
+                        BulkPrice(4, 500.0),
+                        BulkPrice(25, 2500.0),
+                        BulkPrice(50, 4000.0),
+                        BulkPrice(100, 7500.0)
+                    )
+                )
             )
             defaultProducts.forEach { productDao.insertProduct(it) }
         }

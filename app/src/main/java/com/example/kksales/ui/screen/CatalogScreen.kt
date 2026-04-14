@@ -18,9 +18,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.draw.alpha
 import coil.compose.AsyncImage
 import com.example.kksales.R
+import androidx.compose.ui.draw.alpha
 import com.example.kksales.data.local.entity.Product
 import com.example.kksales.data.local.entity.calculatePrice
 import com.example.kksales.data.local.entity.formatQuantity
@@ -60,21 +60,6 @@ fun CatalogScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.title_catalog)) },
                 actions = {
-                    IconButton(onClick = { userViewModel.setLanguage("sv") }) {
-                        Text(
-                            "🇸🇪", 
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.alpha(if (currentLanguage == "sv") 1f else 0.4f)
-                        )
-                    }
-                    IconButton(onClick = { userViewModel.setLanguage("en") }) {
-                        Text(
-                            "🇬🇧", 
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.alpha(if (currentLanguage == "en") 1f else 0.4f)
-                        )
-                    }
-
                     val cartItems by viewModel.cartItems.collectAsState()
                     BadgedBox(
                         badge = {
@@ -166,7 +151,7 @@ fun ProductItem(product: Product, onOrder: (Int, String) -> Unit) {
                     if (product.bulkPrices.isNotEmpty()) {
                         product.bulkPrices.forEach { bulkPrice ->
                             Text(
-                                text = "Rabatt: ${bulkPrice.quantity} ${product.unit} för ${stringResource(R.string.currency_symbol)}${String.format("%.2f", bulkPrice.price)}",
+                                text = stringResource(R.string.label_discount, bulkPrice.quantity, product.unit, stringResource(R.string.currency_symbol), String.format("%.2f", bulkPrice.price)),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.tertiary,
                                 fontWeight = FontWeight.Bold
@@ -226,25 +211,31 @@ fun OrderDialog(
     onConfirm: (Int, String) -> Unit
 ) {
     var quantityStr by remember { mutableStateOf("1") }
-    var selectedUnit by remember { mutableStateOf("Gram") }
-    val units = listOf("Gram", "Hekto", "Kilo")
+    val unitGram = stringResource(R.string.label_gram)
+    val unitHekto = stringResource(R.string.label_hekto)
+    val unitKilo = stringResource(R.string.label_kilo)
+    
+    var selectedUnit by remember { mutableStateOf(unitGram) }
+    val units = listOf(unitGram, unitHekto, unitKilo)
     var expanded by remember { mutableStateOf(false) }
 
     val quantity = quantityStr.toIntOrNull() ?: 0
     
     val basePrice = product.salesPrice
     val displayPrice = when (selectedUnit) {
-        "Hekto" -> basePrice * 100
-        "Kilo" -> basePrice * 1000
+        unitHekto -> basePrice * 100
+        unitKilo -> basePrice * 1000
         else -> basePrice
     }
     
     val multiplier = when (selectedUnit) {
-        "Hekto" -> 100
-        "Kilo" -> 1000
+        unitHekto -> 100
+        unitKilo -> 1000
         else -> 1
     }
-    val totalPrice = displayPrice * quantity
+    
+    val totalGrams = quantity * multiplier
+    val totalPrice = product.calculatePrice(totalGrams)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -253,7 +244,7 @@ fun OrderDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("${stringResource(R.string.label_name)}: ${product.name}")
                 
-                Text("Välj mängd:", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.label_select_quantity), style = MaterialTheme.typography.labelLarge)
                 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
@@ -281,18 +272,29 @@ fun OrderDialog(
                 TextField(
                     value = quantityStr,
                     onValueChange = { quantityStr = it },
-                    label = { Text("Antal $selectedUnit") },
+                    label = { Text(stringResource(R.string.label_count_unit, selectedUnit)) },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val bestPriceForUnit = product.calculatePrice(multiplier)
+                    if (product.bulkPrices.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.label_price_per, selectedUnit, stringResource(R.string.currency_symbol), String.format("%.2f", bestPriceForUnit)),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        val isDiscounted = totalPrice < (displayPrice * quantity)
+                        Text(
+                            text = if (isDiscounted) stringResource(R.string.msg_bulk_discount) else stringResource(R.string.label_price_level, stringResource(R.string.currency_symbol), String.format("%.2f", bestPriceForUnit), selectedUnit),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isDiscounted) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (isDiscounted) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
                     Text(
-                        text = "Pris per $selectedUnit: ${stringResource(R.string.currency_symbol)}${String.format("%.2f", displayPrice)}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "Total: ${stringResource(R.string.currency_symbol)}${String.format("%.2f", totalPrice)}",
+                        text = stringResource(R.string.label_total, stringResource(R.string.currency_symbol), String.format("%.2f", totalPrice)),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -302,7 +304,7 @@ fun OrderDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(quantity * multiplier, selectedUnit.lowercase()) },
+                onClick = { onConfirm(totalGrams, selectedUnit.lowercase()) },
                 enabled = quantity > 0
             ) {
                 Text(stringResource(R.string.action_add_to_cart))

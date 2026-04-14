@@ -25,6 +25,7 @@ import com.example.kksales.ui.viewmodel.BookkeepingViewModel
 import com.example.kksales.ui.viewmodel.UserViewModel
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.foundation.shape.CircleShape
 import coil.compose.AsyncImage
@@ -38,13 +39,60 @@ fun BookkeepingScreen(viewModel: BookkeepingViewModel, userViewModel: UserViewMo
     val loggedInUser by userViewModel.user.collectAsState()
     val viewingUser by viewModel.currentUser.collectAsState()
     val isAdmin = loggedInUser?.isAdmin == true
+    val isOwner = loggedInUser?.isAdminPlus == true
     val context = LocalContext.current
+
+    // Lagerpåfyllning korg (för Ägare)
+    var showRestockCart by remember { mutableStateOf(false) }
 
     // Initialize with logged in user if not set
     LaunchedEffect(loggedInUser) {
         if (viewingUser == null && loggedInUser != null) {
             viewModel.setCurrentUser(loggedInUser)
         }
+    }
+
+    // Handle Export Completion
+    uiState.showExportCompleteOptions?.let { file ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearExportState() },
+            title = { Text("Export Klar") },
+            text = { Text("Bokföringen har genererats: ${file.name}") },
+            confirmButton = {
+                Button(onClick = { 
+                    viewModel.shareFile(context, file)
+                    viewModel.clearExportState()
+                }) {
+                    Text("Dela / Spara")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    viewModel.openFile(context, file)
+                    viewModel.clearExportState()
+                }) {
+                    Text("Öppna")
+                }
+            }
+        )
+    }
+
+    if (uiState.exportProgress != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Exporterar...") },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    LinearProgressIndicator(
+                        progress = { uiState.exportProgress!! },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("${(uiState.exportProgress!! * 100).toInt()}%")
+                }
+            },
+            confirmButton = {}
+        )
     }
 
     Scaffold(
@@ -59,6 +107,16 @@ fun BookkeepingScreen(viewModel: BookkeepingViewModel, userViewModel: UserViewMo
                     }
                 },
                 actions = {
+                    if (isOwner && uiState.restockCart.isNotEmpty()) {
+                        BadgedBox(
+                            badge = { Badge { Text(uiState.restockCart.size.toString()) } },
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            IconButton(onClick = { showRestockCart = true }) {
+                                Icon(Icons.Rounded.ShoppingCart, contentDescription = "Inköpslista")
+                            }
+                        }
+                    }
                     if (isAdmin) {
                         IconButton(onClick = { viewModel.exportToExcel(context) }) {
                             Icon(Icons.Rounded.FileDownload, contentDescription = "Excel")
@@ -204,10 +262,27 @@ fun BookkeepingScreen(viewModel: BookkeepingViewModel, userViewModel: UserViewMo
             ManualRestockDialog(
                 products = products,
                 viewingUser = viewingUser,
+                isOwner = isOwner,
                 onDismiss = { showManualDialog = false },
                 onConfirm = { product, qty ->
-                    viewModel.registerRestock(product, qty)
+                    if (isOwner) {
+                        viewModel.addToRestockCart(product, qty)
+                    } else {
+                        viewModel.registerRestock(product, qty)
+                    }
                     showManualDialog = false
+                }
+            )
+        }
+
+        if (showRestockCart) {
+            RestockCartDialog(
+                cartItems = uiState.restockCart,
+                onDismiss = { showRestockCart = false },
+                onRemove = { viewModel.removeFromRestockCart(it) },
+                onConfirm = { 
+                    viewModel.confirmRestockPurchases(context)
+                    showRestockCart = false
                 }
             )
         }
@@ -215,9 +290,59 @@ fun BookkeepingScreen(viewModel: BookkeepingViewModel, userViewModel: UserViewMo
 }
 
 @Composable
+fun RestockCartDialog(
+    cartItems: List<Pair<Product, Int>>,
+    onDismiss: () -> Unit,
+    onRemove: (Int) -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Inköpslista (Grossist)") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 400.dp)) {
+                if (cartItems.isEmpty()) {
+                    Text("Korgen är tom")
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(cartItems) { index: Int, item: Pair<Product, Int> ->
+                            val product = item.first
+                            val qty = item.second
+                            val qtyLabel = if (qty >= 1000) "${qty/1000}kg" else if (qty >= 100) "${qty/100}hg" else "${qty}g"
+                            
+                            Card {
+                                Row(Modifier.padding(8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Column {
+                                        Text(product.name, fontWeight = FontWeight.Bold)
+                                        Text(qtyLabel)
+                                        Text("Kostnad: ${String.format("%.2f", product.unitCost * qty)} kr", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    IconButton(onClick = { onRemove(index) }) {
+                                        Icon(Icons.Rounded.Delete, null, tint = Color.Red)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm, enabled = cartItems.isNotEmpty()) {
+                Text("Bekräfta & Hämta PDF")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Stäng") }
+        }
+    )
+}
+
+@Composable
 fun ManualRestockDialog(
     products: List<Product>,
     viewingUser: User?,
+    isOwner: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (Product, Int) -> Unit
 ) {
@@ -229,10 +354,10 @@ fun ManualRestockDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lagerpåfyllning (Inköp)") },
+        title = { Text(if (isOwner) "Planera Inköp till Lager" else "Lagerpåfyllning (Inköp)") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Vilken produkt köper du in från huvudlagret?", style = MaterialTheme.typography.labelSmall)
+                Text(if (isOwner) "Vilken produkt ska du köpa in?" else "Vilken produkt köper du in från huvudlagret?", style = MaterialTheme.typography.labelSmall)
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = { expandedProduct = true }, modifier = Modifier.fillMaxWidth()) {
                         Text(selectedProduct?.name ?: "Välj produkt")
@@ -272,10 +397,13 @@ fun ManualRestockDialog(
                         else -> qtyVal
                     }.toInt()
                     
-                    val resellerPrice = viewingUser?.productResellerPrices?.get(selectedProduct!!.id) ?: selectedProduct!!.resellerPrice
-                    val totalCost = resellerPrice * grams
+                    val priceToUse = if (isOwner) selectedProduct!!.unitCost else (viewingUser?.productResellerPrices?.get(selectedProduct!!.id) ?: selectedProduct!!.resellerPrice)
+                    val totalCost = priceToUse * grams
                     
-                    Text("Kostnad som dras från ditt saldo: ${String.format(Locale.getDefault(), "%.2f", totalCost)} kr", style = MaterialTheme.typography.bodySmall, color = Color.Red)
+                    Text("Beräknad kostnad: ${String.format(Locale.getDefault(), "%.2f", totalCost)} kr", style = MaterialTheme.typography.bodySmall, color = if (isOwner) MaterialTheme.colorScheme.primary else Color.Red)
+                    if (isOwner) {
+                        Text("Pris baseras på ditt inköpspris (${selectedProduct!!.unitCost} kr/enhet)", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         },
@@ -292,7 +420,7 @@ fun ManualRestockDialog(
                 },
                 enabled = selectedProduct != null && quantityStr.isNotEmpty()
             ) {
-                Text("Bekräfta Inköp")
+                Text(if (isOwner) "Lägg i inköpskorg" else "Bekräfta Inköp")
             }
         },
         dismissButton = {
@@ -397,6 +525,19 @@ fun ManualSaleDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                     
+                    if (amountReceived.isEmpty() && selectedProduct != null) {
+                        val qtyVal = quantityStr.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        val grams = when(selectedUnit) {
+                            "kg" -> (qtyVal * 1000).toInt()
+                            "hg" -> (qtyVal * 100).toInt()
+                            else -> qtyVal.toInt()
+                        }
+                        val suggestedPrice = selectedProduct!!.calculatePrice(grams)
+                        if (suggestedPrice > 0) {
+                            amountReceived = String.format(Locale.US, "%.2f", suggestedPrice)
+                        }
+                    }
+
                     if (amountReceived.isNotEmpty() && viewingUser != null) {
                         val received = amountReceived.replace(",", ".").toDoubleOrNull() ?: 0.0
                         val qtyVal = quantityStr.replace(",", ".").toDoubleOrNull()?.toInt() ?: 0

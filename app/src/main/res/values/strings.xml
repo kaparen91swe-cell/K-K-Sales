@@ -2,13 +2,13 @@
 <resources>
     <string name="app_name">K&amp;K Bokföring</string>
 
-    <!-- Navigation / Titles -->
+    <!-- Navigation / Titlar -->
     <string name="title_inventory">Lagerhantering</string>
-    <string name="title_catalog">Produktkatalog</string>
-    <string name="title_profile">Min Profil</string>
+    <string name="title_catalog">Katalog</string>
+    <string name="title_profile">Min sida</string>
     <string name="title_bookkeeping">Bokföring</string>
 
-    <!-- Product / Inventory -->
+    <!-- Produkt / Lager -->
     <string name="label_name">Namn</string>
     <string name="label_unit_cost">Inköpspris</string>
     <string name="label_sales_price">Försäljningspris</string>
@@ -17,7 +17,7 @@
     <string name="label_unit">Enhet</string>
     <string name="label_cost_price">Inköp: %1$s | Pris: %2$s</string>
 
-    <!-- Buttons / Actions -->
+    <!-- Knappar / Åtgärder -->
     <string name="action_add_product">Lägg till produkt</string>
     <string name="action_edit_product">Redigera produkt</string>
     <string name="action_save">Spara</string>
@@ -28,13 +28,13 @@
     <string name="action_confirm_order">Bekräfta beställning</string>
     <string name="action_place_order">Lägg beställning</string>
 
-    <!-- Messages -->
+    <!-- Meddelanden -->
     <string name="msg_order_success">Beställningen är lagd!</string>
     <string name="msg_error">Fel: %1$s</string>
     <string name="msg_no_transactions">Inga transaktioner än</string>
     <string name="msg_loading">Laddar...</string>
 
-    <!-- Profile / Finance -->
+    <!-- Profil / Ekonomi -->
     <string name="label_balance">Saldo: %1$s</string>
     <string name="label_transaction_history">Transaktionshistorik</string>
     <string name="label_financial_overview">Ekonomisk översikt</string>
@@ -48,6 +48,168 @@
     <string name="action_checkout">Till kassan</string>
     <string name="msg_cart_empty">Din varukorg är tom</string>
     <string name="tab_history">Historik</string>
+    <string name="title_history">Historik</string>
     <string name="tab_manage_users">Användare</string>
     <string name="action_logout">Logga ut</string>
+
+    <string name="title_manage_users">Hantera Användare</string>
+    <string name="desc_reseller_prices">Säljarpriser</string>
+    <string name="desc_create_user">Skapa användare</string>
+    <string name="label_tools">Mina Verktyg</string>
+    <string name="label_history">Historik</string>
+    <string name="desc_history">Se alla dina händelser och jobb</string>
+    <string name="label_manage_users">Hantera Användare</string>
+    <string name="desc_manage_users">Bossar, Säljare och Arbetare</string>
+    <string name="label_settings">Inställningar</string>
+    <string name="desc_settings">Globala priser och inställningar</string>
+    <string name="label_warehouse_mgmt">Lagerhantering</string>
+    <string name="desc_warehouse_mgmt">Lägg till och redigera produkter</string>
+    <string name="label_dev_mode">Utvecklarläge</string>
+    <string name="desc_dev_mode">Låser upp redigering och designverktyg</string>
+    <string name="action_push_github">Spara design och pusha till GitHub</string>
+    <string name="action_reset_stats">Återställ statistik</string>
+
+    <!-- Uppdrag (Tasks) -->
+    <string name="label_active_tasks">Aktuella Uppdrag</string>
+    <string name="label_completed_tasks">Slutförda Uppdrag</string>
+    <string name="label_address">Adress: %1$s</string>
+    <string name="label_delivery">Leverans: %1$d %2$s (Produkt-ID: %3$d)</string>
+    <string name="label_distance_info">Sträcka: %1$s km (Bränsle: %2$s @ %3$s kr)</string>
+    <string name="label_est_fuel_cost">Beräknad bränslekostnad: %1$s kr</string>
+    <string name="action_done">Klar</string>
+    <string name="label_completed">Slutförd</string>
+    <string name="title_create_task">Skapa Arbetsorder / Uppdrag</string>
+    <string name="label_assign_to">Tilldela till:</string>
+    <string name="label_select_user">Välj användare</string>
+    <string name="label_title">Rubrik</string>
+    <string name="label_description">Beskrivning</string>
+    <string name="label_delivery_details">Leveransdetaljer (valfritt)</string>
+    <string name="label_delivery_address">Leveransadress</string>
+    <string name="action_search_map">Sök på karta</string>
+    <string name="label_distance_km">Avstånd (km)</string>
+    <string name="action_fetch_data">Hämta data</string>
+    <string name="label_select_product">Välj produkt</string>
+    <string name="label_no_product">Ingen produkt</string>
+    <string name="action_send_order">Skicka Order</string>
+
+    <!-- Profildialoger -->
+    <string name="title_choose_profile_pic">Välj profilbild</string>
+    <string name="cat_all">Alla</string>
+    <string name="cat_boss">Boss</string>
+    <string name="cat_reseller">Säljare</string>
+    <string name="cat_transporter">Transportör</string>
+    <string name="label_my_inventory">Mitt Lager</string>
+    <string name="label_unknown_product">Okänd produkt</string>
+
+    <!-- Bränsleberäkning (Fuel Calc) -->
+    <string name="title_fuel_calc">Bränsleberäkning</string>
+    <string name="label_fuel_calc_info">Pris: %1$s kr/L | Förbr: %2$s L/mil</string>
+    <string name="label_distance">Sträcka (km)</string>
+    <string name="label_cost">Kostnad:</string>
+    <string name="action_register_trip">Registrera resa</string>
+
+    <!-- Ekonomi -->
+    <string name="label_profit_balance">Vinst/Saldo</string>
+    <string name="label_cash">Kontanter</string>
+    <string name="label_total_bought">Totalt köpt</string>
+
+    <!-- Administratör (User Management) -->
+    <string name="label_role">Roll: %1$s</string>
+    <string name="label_no_role">Ingen</string>
+    <string name="label_vehicle">Fordon: %1$s</string>
+    <string name="label_no_vehicle">Ej valt</string>
+    <string name="label_balance_profit">Saldo (Vinst): %1$s kr</string>
+    <string name="label_cash_amount">Kontanter: %1$s kr</string>
+    <string name="action_set_vehicle">Välj fordon</string>
+    <string name="action_set_role">Välj roll</string>
+    <string name="action_no_role">Ingen roll</string>
+    <string name="action_reset_profit">Återställ vinst</string>
+    <string name="action_reset_cash">Nollställ kontanter</string>
+    <string name="label_admin">Admin</string>
+    <string name="label_owner">Ägare</string>
+    <string name="label_reseller">Säljare</string>
+    <string name="label_warehouse">Lager</string>
+    <string name="label_transport">Transport</string>
+
+    <!-- Dialogrutor -->
+    <string name="title_reset_cash">Nollställ mottagna kontanter</string>
+    <string name="msg_reset_cash_confirm">Har %1$s redovisat %2$s kr kontant?</string>
+    <string name="action_yes_reset">Ja, nollställ</string>
+    <string name="title_reset_balance">Återställ saldo</string>
+    <string name="msg_reset_balance_confirm">Vill du nollställa saldot för %1$s?</string>
+    <string name="action_reset">Återställ</string>
+    <string name="title_delete_user">Ta bort användare</string>
+    <string name="msg_delete_user_confirm">Är du säker på att du vill ta bort %1$s? Detta går inte att ångra.</string>
+
+    <!-- Användarinställningar -->
+    <string name="title_user_settings">Inställningar för %1$s</string>
+    <string name="label_vehicle_fuel">Fordon och Drivmedel</string>
+    <string name="label_active_fuel_type">Aktiv bränsletyp</string>
+    <string name="label_fuel_price_per_l">Drivmedelspris (kr/L)</string>
+    <string name="hint_auto_fetch">Hämtas automatiskt</string>
+    <string name="label_consumption_per_mil">Förbrukning (L/mil)</string>
+    <string name="label_own_car_bonus">Bonus egen bil (kr/enhet)</string>
+    <string name="label_borrowed_car_fee">Avgift lånad bil (kr/enhet)</string>
+    <string name="label_storage_rent">Lagerhållning och Hyra</string>
+    <string name="label_cost_kr">Kostnad (kr)</string>
+    <string name="label_weekly">Veckovis</string>
+    <string name="label_monthly">Månadsvis</string>
+    <string name="label_day_1_7">Dag (1-7)</string>
+    <string name="label_day_1_31">Datum (1-31)</string>
+    <string name="label_commissions">Provision per produkt (kr/g)</string>
+    <string name="label_security">Säkerhet</string>
+    <string name="action_change_password">Ändra lösenord</string>
+    <string name="label_new_password">Nytt lösenord</string>
+
+    <!-- Admin Lager -->
+    <string name="title_manage_products">Hantera Produkter</string>
+    <string name="label_receiver">Mottagare: %1$s</string>
+
+    <!-- Katalog (Extra) -->
+    <string name="label_discount">Rabatt: %1$d %2$s för %3$s %4$s</string>
+    <string name="label_select_quantity">Välj mängd:</string>
+    <string name="label_price_per">Pris per %1$s: %2$s%3$s</string>
+    <string name="msg_bulk_discount">Mängdrabatt tillämpas!</string>
+    <string name="label_price_level">Prisnivå: %1$s%2$s/%3$s</string>
+    <string name="label_total">Totalt: %1$s%2$s</string>
+    <string name="label_gram">gram</string>
+    <string name="label_hekto">hekto</string>
+    <string name="label_kilo">kilo</string>
+    <string name="label_count_unit">Antal %1$s</string>
+
+    <!-- Globala inställningar -->
+    <string name="title_global_settings">Globala Inställningar</string>
+    <string name="title_fuel_mgmt">Drivmedelshantering</string>
+    <string name="action_fetch_prices">Uppdatera till dagens priser</string>
+    <string name="label_defaults_info">Standardvärden (används om inget satts på användaren)</string>
+    <string name="action_save_settings">Spara inställningar</string>
+
+    <!-- Kassa -->
+    <string name="title_checkout">Kassa</string>
+    <string name="label_payment_method">Betalningsmetod</string>
+    <string name="label_cash_payment">Kontant</string>
+    <string name="label_balance_payment">Saldo</string>
+    <string name="label_btc_payment">Bitcoin (Lightning)</string>
+    <string name="action_pay_now">Betala nu</string>
+    <string name="msg_order_placed">Beställningen är klar!</string>
+
+    <!-- Inloggning -->
+    <string name="msg_welcome">Välkommen till K&amp;K Sales</string>
+    <string name="msg_register_info">Skapa ett nytt konto</string>
+    <string name="msg_login_info">Logga in för att fortsätta</string>
+    <string name="label_username">Användarnamn</string>
+    <string name="label_password">Lösenord</string>
+    <string name="label_remember_me">Kom ihåg mig</string>
+    <string name="action_login">Logga in</string>
+    <string name="action_no_account">Inget konto? Skapa ett här</string>
+    <string name="action_register_save">Spara och registrera</string>
+    <string name="action_back_to_login">Tillbaka till inloggning</string>
+
+    <!-- Första lösenordet -->
+    <string name="msg_welcome_user">Välkommen %1$s!</string>
+    <string name="msg_first_pass_info">Ditt konto skapades av en administratör. Välj ett lösenord för att fortsätta.</string>
+    <string name="label_confirm_password">Bekräfta lösenord</string>
+    <string name="error_pass_short">Lösenordet måste vara minst 4 tecken</string>
+    <string name="error_pass_mismatch">Lösenorden matchar inte</string>
+    <string name="action_save_pass_login">Spara lösenord och logga in</string>
 </resources>

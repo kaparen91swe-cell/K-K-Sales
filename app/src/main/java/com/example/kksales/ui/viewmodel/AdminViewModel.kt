@@ -10,6 +10,7 @@ import com.example.kksales.data.repository.TransactionRepository
 import com.example.kksales.data.local.entity.BulkPrice
 import com.example.kksales.data.local.entity.TransactionCategory
 import com.example.kksales.data.local.entity.TransactionType
+import com.example.kksales.util.FileUtils
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -23,13 +24,16 @@ class AdminViewModel(
     val products: StateFlow<List<Product>> = productRepository.allProducts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addProduct(name: String, unitCost: Double, salesPrice: Double, quantity: Int, unit: String, imageUri: String?, bulkPrices: List<BulkPrice>, lowStockThreshold: Int) {
+    fun addProduct(name: String, unitCost: Double, salesPrice: Double, profitPerUnit: Double, quantity: Int, unit: String, imageUri: String?, bulkPrices: List<BulkPrice>, lowStockThreshold: Int) {
         viewModelScope.launch {
+            val resellerPrice = salesPrice - profitPerUnit
             val productId = productRepository.insertProduct(
                 Product(
                     name = name,
                     unitCost = unitCost,
                     salesPrice = salesPrice,
+                    profitPerUnit = profitPerUnit,
+                    resellerPrice = resellerPrice,
                     quantity = quantity,
                     unit = unit,
                     imageUri = imageUri,
@@ -61,6 +65,12 @@ class AdminViewModel(
 
     fun updateProduct(product: Product, quantityDiff: Int = 0) {
         viewModelScope.launch {
+            val oldProduct = productRepository.getProductById(product.id)
+            if (oldProduct != null && oldProduct.imageUri != product.imageUri) {
+                // Bild har ändrats, ta bort den gamla
+                FileUtils.deleteImageFromInternalStorage(oldProduct.imageUri)
+            }
+            
             productRepository.updateProduct(product)
             
             // Om man har lagt till fler i lager, skapa en ny inköps-transaktion
@@ -85,6 +95,8 @@ class AdminViewModel(
 
     fun deleteProduct(product: Product) {
         viewModelScope.launch {
+            // Ta bort bilden permanent när produkten tas bort
+            FileUtils.deleteImageFromInternalStorage(product.imageUri)
             productRepository.deleteProduct(product)
         }
     }

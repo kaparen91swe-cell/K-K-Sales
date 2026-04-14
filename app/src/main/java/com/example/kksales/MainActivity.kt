@@ -8,8 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,25 +20,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.compose.runtime.collectAsState
-import com.example.kksales.ui.screen.CatalogScreen
-import com.example.kksales.ui.screen.ProfileScreen
+import com.example.kksales.ui.screen.*
 import com.example.kksales.ui.theme.KKSalesTheme
-import com.example.kksales.ui.viewmodel.CatalogViewModel
-import com.example.kksales.ui.viewmodel.UserViewModel
-
-import com.example.kksales.ui.screen.LoginScreen
-import com.example.kksales.ui.screen.AdminDashboardScreen
-import com.example.kksales.ui.screen.BookkeepingScreen
-import com.example.kksales.ui.screen.CartScreen
-import com.example.kksales.ui.screen.ChatScreen
-import com.example.kksales.ui.viewmodel.AdminViewModel
-import com.example.kksales.ui.viewmodel.BookkeepingViewModel
-import com.example.kksales.ui.viewmodel.ChatViewModel
-import com.example.kksales.ui.viewmodel.UpdateViewModel
-import androidx.compose.material.icons.rounded.AdminPanelSettings
-import androidx.compose.material.icons.rounded.Assessment
-import androidx.compose.runtime.LaunchedEffect
+import com.example.kksales.ui.viewmodel.*
 
 class MainActivity : ComponentActivity() {
     private lateinit var catalogViewModel: CatalogViewModel
@@ -99,7 +82,6 @@ class MainActivity : ComponentActivity() {
                 factory = UpdateViewModel.Factory(app.updateRepository)
             )
 
-            // Automatisk synk och uppdatering vid start
             LaunchedEffect(Unit) {
                 bookkeepingViewModel.syncData()
                 updateViewModel.checkForUpdates()
@@ -120,9 +102,15 @@ class MainActivity : ComponentActivity() {
                     lastLanguage = language
                     val locale = java.util.Locale(language)
                     java.util.Locale.setDefault(locale)
-                    val config = context.resources.configuration
-                    config.setLocale(locale)
-                    context.resources.updateConfiguration(config, context.resources.displayMetrics)
+                    
+                    val resources = context.resources
+                    val configuration = resources.configuration
+                    configuration.setLocale(locale)
+                    
+                    resources.displayMetrics?.let { metrics ->
+                        @Suppress("DEPRECATION")
+                        resources.updateConfiguration(configuration, metrics)
+                    }
                     (context as? android.app.Activity)?.recreate()
                 }
             }
@@ -146,12 +134,13 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    object Catalog : Screen("catalog", "Catalog", Icons.Rounded.ShoppingBag)
-    object Profile : Screen("profile", "Profile", Icons.Rounded.Person)
-    object Admin : Screen("admin", "Admin", Icons.Rounded.AdminPanelSettings)
+    object Catalog : Screen("catalog", "Katalog", Icons.Rounded.ShoppingBag)
+    object Profile : Screen("profile", "Min sida", Icons.Rounded.Person)
+    object Warehouse : Screen("warehouse", "Lager", Icons.Rounded.Warehouse)
     object Bookkeeping : Screen("bookkeeping", "Statistik", Icons.Rounded.Assessment)
     object Chat : Screen("chat", "Chatt", Icons.AutoMirrored.Rounded.Chat)
-    object Cart : Screen("cart", "Korg", Icons.Rounded.ShoppingBag) // Hidden from bottom bar
+    object Cart : Screen("cart", "Korg", Icons.Rounded.ShoppingCart)
+    object Restock : Screen("restock", "Hämta", Icons.Rounded.Inventory)
 }
 
 @Composable
@@ -165,10 +154,13 @@ fun MainScreen(
     val navController = rememberNavController()
     val user by userViewModel.user.collectAsState()
     val isAdmin = user?.isAdmin ?: false
+    val isReseller = user?.isReseller ?: false
 
     val items = mutableListOf(Screen.Bookkeeping, Screen.Catalog, Screen.Chat, Screen.Profile)
     if (isAdmin) {
-        items.add(Screen.Admin)
+        items.add(Screen.Warehouse)
+    } else if (isReseller) {
+        items.add(Screen.Restock)
     }
 
     Scaffold(
@@ -207,10 +199,25 @@ fun MainScreen(
                     onNavigateToCart = { navController.navigate(Screen.Cart.route) }
                 )
             }
-            composable(Screen.Profile.route) { ProfileScreen(userViewModel, catalogViewModel) }
-            composable(Screen.Admin.route) { AdminDashboardScreen(adminViewModel) }
+            composable(Screen.Profile.route) { ProfileScreen(userViewModel, catalogViewModel, adminViewModel, navController) }
+            composable("history") { 
+                HistoryScreen(userViewModel, catalogViewModel) { navController.popBackStack() } 
+            }
+            composable("manage_users") { 
+                UserManagementScreen(userViewModel, catalogViewModel, navController) { navController.popBackStack() } 
+            }
+            composable("global_settings") { 
+                GlobalSettingsScreen(userViewModel) { navController.popBackStack() } 
+            }
+            composable("inventory_management") { 
+                InventoryManagementScreen(adminViewModel) { navController.popBackStack() } 
+            }
+            composable("create_user") { CreateUserScreen(userViewModel) { navController.popBackStack() } }
+            composable("edit_user_prices") { UserPriceManagementScreen(userViewModel, catalogViewModel) { navController.popBackStack() } }
+            composable(Screen.Warehouse.route) { WarehouseScreen(userViewModel, adminViewModel, navController) }
             composable(Screen.Bookkeeping.route) { BookkeepingScreen(bookkeepingViewModel, userViewModel) }
             composable(Screen.Chat.route) { ChatScreen(chatViewModel) }
+            composable(Screen.Restock.route) { RestockScreen(bookkeepingViewModel, userViewModel, onNavigateBack = { navController.popBackStack() }) }
             composable(Screen.Cart.route) { 
                 CartScreen(
                     viewModel = catalogViewModel,

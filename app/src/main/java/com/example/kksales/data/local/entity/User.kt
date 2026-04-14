@@ -28,10 +28,16 @@ data class User(
     val fuelConsumption: Double? = null,
     val vehicleBonusPerUnit: Double? = null,
     val vehicleFeePerUnit: Double? = null,
+    val preferredFuelType: String? = null, // "95", "98", "Diesel"
     
     // Provision per produkt (ProduktID -> Provision i kr/g)
     val productCommissions: Map<Int, Double> = emptyMap(),
     
     // Specifika priser per produkt för denna användare (ProduktID -> Pris)
-    val productResellerPrices: Map<Int, Double> = emptyMap()
+    val productResellerPrices: Map<Int, Double> = emptyMap(),
+
+    // Lagerhållare inställningar
+    val storageCost: Double? = null,
+    val storagePaymentInterval: String? = null, // "Weekly", "Monthly"
+    val storagePaymentDay: Int? = null // 1-7 för veckodag, 1-31 för datum
 )

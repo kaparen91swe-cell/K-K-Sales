@@ -8,21 +8,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.automirrored.rounded.Assignment
-import androidx.compose.material.icons.automirrored.rounded.DirectionsRun
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavController
 import com.example.kksales.R
 import com.example.kksales.data.local.entity.Transaction
 import com.example.kksales.data.local.entity.TransactionCategory
@@ -31,18 +33,36 @@ import com.example.kksales.data.local.entity.User
 import com.example.kksales.data.local.entity.UserInventory
 import com.example.kksales.ui.viewmodel.CatalogViewModel
 import com.example.kksales.ui.viewmodel.UserViewModel
+import com.example.kksales.ui.viewmodel.AdminViewModel
+import com.example.kksales.util.FileUtils
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import android.widget.Toast
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(viewModel: UserViewModel, catalogViewModel: CatalogViewModel) {
+fun ProfileScreen(
+    viewModel: UserViewModel, 
+    catalogViewModel: CatalogViewModel,
+    adminViewModel: AdminViewModel,
+    navController: NavController
+) {
     val user by viewModel.user.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
-    val userTasks by viewModel.userTasks.collectAsState()
     val allUsers by viewModel.allUsers.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.toastMessage.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
     
-    var selectedTab by remember { mutableIntStateOf(0) }
     var showAddTaskDialog by remember { mutableStateOf(false) }
     val isKaparen = user?.isAdmin == true || user?.role?.contains("Boss", ignoreCase = true) == true
 
@@ -60,25 +80,20 @@ fun ProfileScreen(viewModel: UserViewModel, catalogViewModel: CatalogViewModel) 
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            if (isKaparen && selectedTab == 0) {
-                FloatingActionButton(onClick = { showAddTaskDialog = true }, containerColor = MaterialTheme.colorScheme.tertiaryContainer) {
-                    Icon(Icons.AutoMirrored.Rounded.Assignment, contentDescription = "Nytt uppdrag")
-                }
-            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
-            UserInfoHeader(user, transactions, viewModel)
-
-            val products by catalogViewModel.products.collectAsState()
-            val inventory by viewModel.userInventory.collectAsState()
-            val settings by viewModel.settings.collectAsState()
+            UserInfoHeader(
+                user = user, 
+                transactions = transactions, 
+                viewModel = viewModel,
+                onAddTaskClick = if (isKaparen) { { showAddTaskDialog = true } } else null
+            )
 
             if (user?.role == "Transportör") {
                 FuelCalculatorSection(user!!, settings, viewModel)
@@ -88,42 +103,30 @@ fun ProfileScreen(viewModel: UserViewModel, catalogViewModel: CatalogViewModel) 
                 DeveloperModeSection(settings, viewModel)
             }
 
-            if (inventory.isNotEmpty()) {
-                UserInventorySection(inventory, products)
-            }
-
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Historik") }
-                )
-                if (isKaparen) {
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text(stringResource(R.string.tab_manage_users)) }
-                    )
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.label_tools), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp))
+            
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                MenuCard(stringResource(R.string.label_history), stringResource(R.string.desc_history), Icons.Rounded.History) {
+                    navController.navigate("history")
                 }
-            }
-
-            Box(modifier = Modifier.padding(16.dp)) {
-                if (selectedTab == 0) {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        if (userTasks.isNotEmpty()) {
-                            TaskListSection(userTasks, onComplete = { viewModel.completeTask(it.id) })
-                        }
-                        TransactionList(transactions, products)
+                
+                if (isKaparen) {
+                    MenuCard(stringResource(R.string.label_manage_users), stringResource(R.string.desc_manage_users), Icons.Rounded.People) {
+                        navController.navigate("manage_users")
                     }
-                } else if (selectedTab == 1 && isKaparen) {
-                    UserManagementList(allUsers, user, viewModel, products)
+                    MenuCard(stringResource(R.string.label_settings), stringResource(R.string.desc_settings), Icons.Rounded.Settings) {
+                        navController.navigate("global_settings")
+                    }
                 }
             }
         }
 
         if (showAddTaskDialog) {
             val products by catalogViewModel.products.collectAsState()
-            val settings by viewModel.settings.collectAsState()
             AddTaskDialog(
                 users = allUsers.filter { it.id != user?.id },
                 products = products,
@@ -153,7 +156,39 @@ fun ProfileScreen(viewModel: UserViewModel, catalogViewModel: CatalogViewModel) 
 }
 
 @Composable
+fun MenuCard(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Icon(icon, null, modifier = Modifier.padding(8.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            }
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
+@Composable
 fun DeveloperModeSection(settings: com.example.kksales.data.local.entity.AppSettings, viewModel: UserViewModel) {
+    var devClickCount by remember { mutableIntStateOf(0) }
+    
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
@@ -164,22 +199,29 @@ fun DeveloperModeSection(settings: com.example.kksales.data.local.entity.AppSett
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("Developer Mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Låser upp redigering och designverktyg", style = MaterialTheme.typography.labelSmall)
+                Column(
+                    modifier = Modifier.weight(1f).clickable { 
+                        if (settings.isDeveloperModeEnabled) {
+                            devClickCount++
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.label_dev_mode), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.desc_dev_mode), style = MaterialTheme.typography.labelSmall)
                 }
                 Switch(
                     checked = settings.isDeveloperModeEnabled,
-                    onCheckedChange = { viewModel.toggleDeveloperMode() }
+                    onCheckedChange = { 
+                        viewModel.toggleDeveloperMode() 
+                        devClickCount = 0
+                    }
                 )
             }
 
-            if (settings.isDeveloperModeEnabled) {
+            if (settings.isDeveloperModeEnabled && devClickCount >= 3) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
-                        // Här triggas "Spara & Push" logiken
-                        // I en verklig app skulle detta anropa ett API som startar en GitHub Action
                         viewModel.triggerGithubUpdate()
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -187,14 +229,21 @@ fun DeveloperModeSection(settings: com.example.kksales.data.local.entity.AppSett
                 ) {
                     Icon(Icons.Rounded.CloudUpload, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Spara Design & Pusha till GitHub")
+                    Text(stringResource(R.string.action_push_github))
                 }
-                Text(
-                    "Varning: Detta kommer att generera en ny APK och uppdatera version.json på GitHub.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        viewModel.resetGlobalStatistics()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Rounded.DeleteForever, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.action_reset_stats))
+                }
             }
         }
     }
@@ -221,6 +270,7 @@ fun TaskListSection(tasks: List<com.example.kksales.data.local.entity.Task>, onC
 
 @Composable
 fun TaskItem(task: com.example.kksales.data.local.entity.Task, onComplete: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -238,7 +288,18 @@ fun TaskItem(task: com.example.kksales.data.local.entity.Task, onComplete: () ->
                 }
                 
                 if (task.address != null) {
-                    Text("Adress: ${task.address}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = "Adress: ${task.address}", 
+                        style = MaterialTheme.typography.bodySmall, 
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            val uri = android.net.Uri.parse("google.navigation:q=${android.net.Uri.encode(task.address)}")
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                            intent.setPackage("com.google.android.apps.maps")
+                            context.startActivity(intent)
+                        }
+                    )
                 }
                 if (task.productId != null && task.quantity != null) {
                     Text("Leverans: ${task.quantity} ${task.unit ?: ""} (Produkt ID: ${task.productId})", style = MaterialTheme.typography.bodySmall)
@@ -283,6 +344,7 @@ fun AddTaskDialog(
     
     var expandedUser by remember { mutableStateOf(false) }
     var expandedProduct by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -307,8 +369,41 @@ fun AddTaskDialog(
                 HorizontalDivider()
                 Text("Leveransdetaljer (Valfritt)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 
-                TextField(value = address, onValueChange = { address = it }, label = { Text("Leveransadress") }, modifier = Modifier.fillMaxWidth())
-                TextField(value = distanceKm, onValueChange = { distanceKm = it }, label = { Text("Avstånd (km)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                TextField(
+                    value = address, 
+                    onValueChange = { address = it }, 
+                    label = { Text("Leveransadress") }, 
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            val uri = android.net.Uri.parse("geo:0,0?q=${android.net.Uri.encode(address)}")
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                            intent.setPackage("com.google.android.apps.maps")
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Maps not installed
+                            }
+                        }) {
+                            Icon(Icons.Rounded.Map, "Sök på karta")
+                        }
+                    }
+                )
+                TextField(
+                    value = distanceKm, 
+                    onValueChange = { distanceKm = it }, 
+                    label = { Text("Avstånd (km)") }, 
+                    modifier = Modifier.fillMaxWidth(), 
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            // Hämta pris från settings automatiskt
+                            // Detta fält kan t.ex. användas för att trigga en beräkning
+                        }) {
+                            Icon(Icons.Rounded.AutoFixHigh, "Hämta data")
+                        }
+                    }
+                )
                 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = { expandedProduct = true }, modifier = Modifier.fillMaxWidth()) {
@@ -352,102 +447,6 @@ fun AddTaskDialog(
 }
 
 @Composable
-fun AdminRegisterDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isAdmin by remember { mutableStateOf(false) }
-    var isAdminPlus by remember { mutableStateOf(false) }
-    var isReseller by remember { mutableStateOf(false) }
-    var isLageransvarig by remember { mutableStateOf(false) }
-    var isTransportor by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { 
-            Text(
-                "Skapa ny användare", 
-                style = MaterialTheme.typography.headlineSmall, 
-                fontWeight = FontWeight.Bold 
-            ) 
-        },
-        text = {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp), 
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                item {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Namn") },
-                        modifier = Modifier.fillMaxWidth(),
-                        leadingIcon = { Icon(Icons.Rounded.Person, null) },
-                        singleLine = true
-                    )
-                }
-                item {
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Lösenord (valfritt)") },
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        leadingIcon = { Icon(Icons.Rounded.Lock, null) },
-                        singleLine = true
-                    )
-                }
-                
-                item {
-                    Text(
-                        "Behörigheter & Roller", 
-                        style = MaterialTheme.typography.titleSmall, 
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        ),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Column(modifier = Modifier.padding(4.dp)) {
-                            RoleToggleRow("Administratör", isAdmin) { isAdmin = it }
-                            RoleToggleRow("Admin+", isAdminPlus) { isAdminPlus = it }
-                            RoleToggleRow("Säljare", isReseller) { isReseller = it }
-                            RoleToggleRow("Lageransvarig", isLageransvarig) { isLageransvarig = it }
-                            RoleToggleRow("Transportör", isTransportor) { isTransportor = it }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name, password, isAdmin, isAdminPlus, isReseller, isLageransvarig, isTransportor) },
-                enabled = name.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Skapa Användare")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Avbryt")
-            }
-        }
-    )
-}
-
-@Composable
 fun RoleToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
@@ -475,9 +474,13 @@ fun RoleToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) ->
 }
 
 @Composable
-fun UserInfoHeader(user: User?, transactions: List<Transaction>, viewModel: UserViewModel) {
+fun UserInfoHeader(
+    user: User?, 
+    transactions: List<Transaction>, 
+    viewModel: UserViewModel,
+    onAddTaskClick: (() -> Unit)? = null
+) {
     var showIconPicker by remember { mutableStateOf(false) }
-    val isAdminPlus = user?.isAdminPlus == true
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -488,58 +491,94 @@ fun UserInfoHeader(user: User?, transactions: List<Transaction>, viewModel: User
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clickable { showIconPicker = true },
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                val iconRes = when (user?.profileIcon) {
-                    "mafia_1", "mafia_2" -> R.drawable.placeholder
-                    "rasta_1" -> R.drawable.placeholder
-                    "car_1", "car_2" -> R.drawable.placeholder
-                    else -> null
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clickable { showIconPicker = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    val iconRes = when (user?.profileIcon) {
+                        "boss_bulldog_1" -> R.drawable.boss_bulldog_1
+                        "boss_bulldog_2" -> R.drawable.boss_bulldog_2
+                        "boss_bulldog_3" -> R.drawable.boss_bulldog_3
+                        "boss_bulldog_4" -> R.drawable.boss_bulldog_4
+                        "reseller_rasta_1" -> R.drawable.reseller_rasta_1
+                        "reseller_rasta_2" -> R.drawable.reseller_rasta_2
+                        "reseller_rasta_3" -> R.drawable.reseller_rasta_3
+                        "reseller_rasta_4" -> R.drawable.reseller_rasta_4
+                        "reseller_rasta_5" -> R.drawable.reseller_rasta_5
+                        "reseller_sales_1" -> R.drawable.reseller_sales_1
+                        "reseller_sales_2" -> R.drawable.reseller_sales_2
+                        "reseller_sales_3" -> R.drawable.reseller_sales_3
+                        "reseller_sales_4" -> R.drawable.reseller_sales_4
+                        "reseller_sales_5" -> R.drawable.reseller_sales_5
+                        "reseller_sales_6" -> R.drawable.reseller_sales_6
+                        "transporter_jah_1" -> R.drawable.transporter_jah_1
+                        "transporter_jah_2" -> R.drawable.transporter_jah_2
+                        "transporter_north_1" -> R.drawable.transporter_north_1
+                        "transporter_express_1" -> R.drawable.transporter_express_1
+                        else -> null
+                    }
+
+                    if (iconRes != null) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(iconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(72.dp),
+                            tint = androidx.compose.ui.graphics.Color.Unspecified
+                        )
+                    } else {
+                        Icon(
+                            Icons.Rounded.Person,
+                            null,
+                            modifier = Modifier.size(72.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            Icons.Rounded.Edit,
+                            null,
+                            modifier = Modifier.padding(4.dp).size(12.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
 
-                if (iconRes != null) {
-                    Icon(
-                        painter = androidx.compose.ui.res.painterResource(iconRes),
-                        contentDescription = null,
-                        modifier = Modifier.size(72.dp),
-                        tint = androidx.compose.ui.graphics.Color.Unspecified
-                    )
-                } else {
-                    Icon(
-                        Icons.Rounded.Person,
-                        null,
-                        modifier = Modifier.size(72.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                
-                Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(
-                        Icons.Rounded.Edit,
-                        null,
-                        modifier = Modifier.padding(4.dp).size(12.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
+                if (onAddTaskClick != null) {
+                    IconButton(
+                        onClick = onAddTaskClick,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 8.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shadowElevation = 2.dp
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.Assignment,
+                                contentDescription = "Nytt uppdrag",
+                                modifier = Modifier.padding(8.dp),
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
                 }
             }
 
             Text(user?.name ?: "...", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             if (user?.role != null) {
                 Text(user.role, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
-                if (user.role == "Transportör") {
-                    Text(user.vehicleType ?: "Ingen bil vald", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
-                }
-            }
-            
-            if (isAdminPlus) {
-                Text("ADMIN+", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Black)
             }
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -570,17 +609,36 @@ fun UserInfoHeader(user: User?, transactions: List<Transaction>, viewModel: User
 fun IconPickerDialog(user: User, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
     val allIcons = listOf(
         Triple("default", Icons.Rounded.Person, "Alla"),
-        Triple("mafia_1", Icons.Rounded.Pets, "Boss"),
-        Triple("mafia_2", Icons.Rounded.Security, "Boss"),
-        Triple("rasta_1", Icons.AutoMirrored.Rounded.DirectionsRun, "Säljare"),
-        Triple("car_1", Icons.Rounded.DirectionsCar, "Transportör"),
-        Triple("car_2", Icons.Rounded.LocalShipping, "Transportör")
+        Triple("boss_bulldog_1", Icons.Rounded.Pets, "Boss"),
+        Triple("boss_bulldog_2", Icons.Rounded.Pets, "Boss"),
+        Triple("boss_bulldog_3", Icons.Rounded.Pets, "Boss"),
+        Triple("boss_bulldog_4", Icons.Rounded.Pets, "Boss"),
+        Triple("reseller_rasta_1", Icons.Rounded.DirectionsRun, "Säljare"),
+        Triple("reseller_rasta_2", Icons.Rounded.DirectionsRun, "Säljare"),
+        Triple("reseller_rasta_3", Icons.Rounded.DirectionsRun, "Säljare"),
+        Triple("reseller_rasta_4", Icons.Rounded.DirectionsRun, "Säljare"),
+        Triple("reseller_rasta_5", Icons.Rounded.DirectionsRun, "Säljare"),
+        Triple("reseller_sales_1", Icons.Rounded.BusinessCenter, "Säljare"),
+        Triple("reseller_sales_2", Icons.Rounded.BusinessCenter, "Säljare"),
+        Triple("reseller_sales_3", Icons.Rounded.BusinessCenter, "Säljare"),
+        Triple("reseller_sales_4", Icons.Rounded.BusinessCenter, "Säljare"),
+        Triple("reseller_sales_5", Icons.Rounded.BusinessCenter, "Säljare"),
+        Triple("reseller_sales_6", Icons.Rounded.BusinessCenter, "Säljare"),
+        Triple("transporter_jah_1", Icons.Rounded.LocalShipping, "Transportör"),
+        Triple("transporter_jah_2", Icons.Rounded.LocalShipping, "Transportör"),
+        Triple("transporter_north_1", Icons.Rounded.LocalShipping, "Transportör"),
+        Triple("transporter_express_1", Icons.Rounded.LocalShipping, "Transportör")
     )
 
-    val availableIcons = if (user.isAdmin) {
+    val availableIcons = if (user.isAdminPlus) {
         allIcons
     } else {
-        allIcons.filter { it.third == "Alla" || it.third == user.role }
+        allIcons.filter { 
+            it.third == "Alla" || 
+            (it.third == "Boss" && (user.role?.contains("Boss") == true || user.isAdmin)) ||
+            (it.third == "Säljare" && (user.role == "Säljare" || user.isReseller)) ||
+            (it.third == "Transportör" && (user.role == "Transportör" || user.isTransportor))
+        }
     }
 
     AlertDialog(
@@ -685,46 +743,29 @@ fun InfoStat(label: String, value: String) {
 }
 
 @Composable
-fun TransactionList(transactions: List<Transaction>, products: List<com.example.kksales.data.local.entity.Product>) {
-    Column {
-        Text(stringResource(R.string.label_transaction_history), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        if (transactions.isEmpty()) {
-            Text(stringResource(R.string.msg_no_transactions))
-        } else {
-            LazyColumn(modifier = Modifier.heightIn(max = 400.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(transactions) { transaction ->
-                    val productName = products.find { it.id == transaction.productId }?.name ?: "Okänd produkt"
-                    TransactionItem(transaction, productName = productName)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun UserManagementList(users: List<User>, currentUser: User?, viewModel: UserViewModel, products: List<com.example.kksales.data.local.entity.Product>) {
-    val settings by viewModel.settings.collectAsState()
-    var showSettingsDialog by remember { mutableStateOf(false) }
-    var showCreateUserDialog by remember { mutableStateOf(false) }
-    var showPriceEditDialog by remember { mutableStateOf(false) }
-
-    Column {
+fun UserManagementList(users: List<User>, currentUser: User?, viewModel: UserViewModel, products: List<com.example.kksales.data.local.entity.Product>, navController: NavController) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Hantera Användare", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { showSettingsDialog = true }) {
-                Icon(Icons.Rounded.Settings, contentDescription = "Appinställningar")
+            Row {
+                IconButton(onClick = { navController.navigate("edit_user_prices") }) {
+                    Icon(Icons.Rounded.Sell, "Priser")
+                }
+                IconButton(onClick = { navController.navigate("create_user") }) {
+                    Icon(Icons.Rounded.Add, "Skapa")
+                }
             }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
             items(users.filter { it.name != "Admin" }) { user ->
                 UserAdminItem(user, 
+                    loggedInUser = currentUser,
                     onToggleAdmin = { viewModel.toggleAdminStatus(user) },
                     onToggleAdminPlus = { viewModel.toggleAdminPlusStatus(user) },
                     onToggleReseller = { viewModel.toggleResellerStatus(user) },
@@ -739,248 +780,12 @@ fun UserManagementList(users: List<User>, currentUser: User?, viewModel: UserVie
             }
         }
     }
-
-    if (showSettingsDialog) {
-        AppSettingsDialog(
-            settings = settings,
-            user = currentUser,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { newSettings ->
-                viewModel.updateSettings(newSettings)
-                showSettingsDialog = false
-            },
-            onAddUser = { 
-                showCreateUserDialog = true
-                showSettingsDialog = false
-            },
-            onClearHistory = { viewModel.clearAllTransactions() },
-            onResetBalances = { viewModel.resetAllUserBalances() },
-            onEditUserPrices = { 
-                showPriceEditDialog = true
-                showSettingsDialog = false
-            }
-        )
-    }
-
-    if (showCreateUserDialog) {
-        AdminRegisterDialog(
-            onDismiss = { showCreateUserDialog = false },
-            onConfirm = { name, pass, isAdmin, isAdminPlus, isReseller, isLageransvarig, isTransportor ->
-                viewModel.registerUser(
-                    name = name, 
-                    password = if(pass.isBlank()) null else pass, 
-                    isAdmin = isAdmin,
-                    isAdminPlus = isAdminPlus,
-                    isReseller = isReseller,
-                    isLageransvarig = isLageransvarig,
-                    isTransportor = isTransportor,
-                    onSuccess = {},
-                    onError = {}
-                )
-                showCreateUserDialog = false
-            }
-        )
-    }
-
-    if (showPriceEditDialog) {
-        UserPriceManagementDialog(
-            users = users.filter { it.isReseller },
-            products = products,
-            onDismiss = { showPriceEditDialog = false },
-            onSave = { updatedUser ->
-                viewModel.updateUser(updatedUser)
-            }
-        )
-    }
-}
-
-@Composable
-fun UserPriceManagementDialog(
-    users: List<User>,
-    products: List<com.example.kksales.data.local.entity.Product>,
-    onDismiss: () -> Unit,
-    onSave: (User) -> Unit
-) {
-    var selectedUser by remember { mutableStateOf<User?>(users.firstOrNull()) }
-    var expandedUser by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Redigera Säljarpriser") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { expandedUser = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(selectedUser?.name ?: "Välj säljare")
-                    }
-                    DropdownMenu(expanded = expandedUser, onDismissRequest = { expandedUser = false }) {
-                        users.forEach { user ->
-                            DropdownMenuItem(text = { Text(user.name) }, onClick = { selectedUser = user; expandedUser = false })
-                        }
-                    }
-                }
-
-                selectedUser?.let { user ->
-                    products.forEach { product ->
-                        val currentPrice = remember(user.id, product.id) { 
-                            mutableStateOf(user.productResellerPrices[product.id]?.toString() ?: "") 
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(product.name, modifier = Modifier.weight(1f))
-                            TextField(
-                                value = currentPrice.value,
-                                onValueChange = { 
-                                    currentPrice.value = it
-                                    val newPrices = user.productResellerPrices.toMutableMap()
-                                    val price = it.replace(",", ".").toDoubleOrNull()
-                                    if (price != null) newPrices[product.id] = price else newPrices.remove(product.id)
-                                    onSave(user.copy(productResellerPrices = newPrices))
-                                },
-                                modifier = Modifier.width(80.dp),
-                                label = { Text("Pris") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { Button(onClick = onDismiss) { Text("Klar") } }
-    )
-}
-
-@Composable
-fun AppSettingsDialog(
-    settings: com.example.kksales.data.local.entity.AppSettings,
-    user: User?,
-    onDismiss: () -> Unit,
-    onSave: (com.example.kksales.data.local.entity.AppSettings) -> Unit,
-    onAddUser: () -> Unit,
-    onClearHistory: () -> Unit,
-    onResetBalances: () -> Unit,
-    onEditUserPrices: () -> Unit
-) {
-    var p95 by remember { mutableStateOf(settings.fuelPrice95.toString()) }
-    var p98 by remember { mutableStateOf(settings.fuelPrice98.toString()) }
-    var pDiesel by remember { mutableStateOf(settings.fuelPriceDiesel.toString()) }
-    var selectedType by remember { mutableStateOf(settings.selectedFuelType) }
-    var consumption by remember { mutableStateOf(settings.fuelConsumption.toString()) }
-    var bonus by remember { mutableStateOf(settings.vehicleBonusPerUnit.toString()) }
-    var fee by remember { mutableStateOf(settings.vehicleFeePerUnit.toString()) }
-    
-    var isFetching by remember { mutableStateOf(false) }
-    val isAdminPlus = user?.isAdminPlus == true
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            Button(onClick = {
-                onSave(settings.copy(
-                    fuelPrice95 = p95.toDoubleOrNull() ?: settings.fuelPrice95,
-                    fuelPrice98 = p98.toDoubleOrNull() ?: settings.fuelPrice98,
-                    fuelPriceDiesel = pDiesel.toDoubleOrNull() ?: settings.fuelPriceDiesel,
-                    selectedFuelType = selectedType,
-                    fuelConsumption = consumption.toDoubleOrNull() ?: settings.fuelConsumption,
-                    vehicleBonusPerUnit = bonus.toDoubleOrNull() ?: settings.vehicleBonusPerUnit,
-                    vehicleFeePerUnit = fee.toDoubleOrNull() ?: settings.vehicleFeePerUnit
-                ))
-            }) { Text("Spara") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Avbryt") }
-        },
-        title = { Text("Globala Inställningar") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                
-                Button(onClick = onAddUser, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Rounded.Add, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Skapa ny användare")
-                }
-
-                Button(onClick = onEditUserPrices, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Rounded.Sell, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Redigera Säljarpriser")
-                }
-
-                if (isAdminPlus) {
-                    HorizontalDivider()
-                    Text("Admin+ Verktyg", style = MaterialTheme.typography.labelSmall, color = Color.Red)
-                    OutlinedButton(
-                        onClick = {
-                            onClearHistory()
-                            onDismiss()
-                        }, 
-                        modifier = Modifier.fillMaxWidth(), 
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-                    ) {
-                        Icon(Icons.Rounded.Delete, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Nollställ All Historik")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            onResetBalances()
-                            onDismiss()
-                        }, 
-                        modifier = Modifier.fillMaxWidth(), 
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-                    ) {
-                        Icon(Icons.Rounded.Refresh, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Nollställ Allas Saldo & Kontanter")
-                    }
-                }
-
-                HorizontalDivider()
-                Text("Drivmedelspriser (kr/L)", style = MaterialTheme.typography.labelSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextField(value = p95, onValueChange = { p95 = it }, label = { Text("95") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    TextField(value = p98, onValueChange = { p98 = it }, label = { Text("98") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    TextField(value = pDiesel, onValueChange = { pDiesel = it }, label = { Text("Diesel") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                }
-                
-                Button(
-                    onClick = { 
-                        isFetching = true
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            p95 = "17.89"
-                            p98 = "18.74"
-                            pDiesel = "18.12"
-                            isFetching = false
-                        }, 1500)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isFetching
-                ) {
-                    if (isFetching) CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    else Text("Hämta dagens priser (Sök)")
-                }
-
-                Text("Aktiv bränsletyp", style = MaterialTheme.typography.labelSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("95", "98", "Diesel").forEach { type ->
-                        FilterChip(
-                            selected = selectedType == type,
-                            onClick = { selectedType = type },
-                            label = { Text(type) }
-                        )
-                    }
-                }
-
-                TextField(value = consumption, onValueChange = { consumption = it }, label = { Text("Förbrukning (L/mil)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                TextField(value = bonus, onValueChange = { bonus = it }, label = { Text("Bonus Egen Bil (kr/enhet)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                TextField(value = fee, onValueChange = { fee = it }, label = { Text("Avgift Lånad Bil (kr/enhet)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            }
-        }
-    )
 }
 
 @Composable
 fun UserAdminItem(
     user: User, 
+    loggedInUser: User?,
     onToggleAdmin: () -> Unit, 
     onToggleAdminPlus: () -> Unit,
     onToggleReseller: () -> Unit, 
@@ -1029,13 +834,7 @@ fun UserAdminItem(
                             }
                             DropdownMenu(expanded = expandedVehicleMenu, onDismissRequest = { expandedVehicleMenu = false }) {
                                 vehicles.forEach { v ->
-                                    DropdownMenuItem(
-                                        text = { Text(v) }, 
-                                        onClick = { 
-                                            onSetVehicle(v)
-                                            expandedVehicleMenu = false 
-                                        }
-                                    )
+                                    DropdownMenuItem(text = { Text(v) }, onClick = { onSetVehicle(v); expandedVehicleMenu = false })
                                 }
                             }
                         }
@@ -1046,21 +845,9 @@ fun UserAdminItem(
                             Icon(Icons.Rounded.Work, contentDescription = "Sätt roll")
                         }
                         DropdownMenu(expanded = expandedRoleMenu, onDismissRequest = { expandedRoleMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Ingen roll") }, 
-                                onClick = { 
-                                    onSetRole(null)
-                                    expandedRoleMenu = false 
-                                }
-                            )
+                            DropdownMenuItem(text = { Text("Ingen roll") }, onClick = { onSetRole(null); expandedRoleMenu = false })
                             roles.forEach { role ->
-                                DropdownMenuItem(
-                                    text = { Text(role) }, 
-                                    onClick = { 
-                                        onSetRole(role)
-                                        expandedRoleMenu = false 
-                                    }
-                                )
+                                DropdownMenuItem(text = { Text(role) }, onClick = { onSetRole(role); expandedRoleMenu = false })
                             }
                         }
                     }
@@ -1081,14 +868,23 @@ fun UserAdminItem(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                val isOwner = loggedInUser?.isAdminPlus == true
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = user.isAdmin, onCheckedChange = { onToggleAdmin() })
-                        Text("Admin", style = MaterialTheme.typography.bodySmall)
+                        Checkbox(
+                            checked = user.isAdmin, 
+                            onCheckedChange = { onToggleAdmin() },
+                            enabled = isOwner
+                        )
+                        Text("Admin", style = MaterialTheme.typography.bodySmall, color = if(isOwner) Color.Unspecified else Color.Gray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = user.isAdminPlus, onCheckedChange = { onToggleAdminPlus() })
-                        Text("Admin+", style = MaterialTheme.typography.bodySmall)
+                        Checkbox(
+                            checked = user.isAdminPlus, 
+                            onCheckedChange = { onToggleAdminPlus() },
+                            enabled = isOwner
+                        )
+                        Text("Ägare", style = MaterialTheme.typography.bodySmall, color = if(isOwner) Color.Unspecified else Color.Gray)
                     }
                 }
                 Column {
@@ -1097,17 +893,13 @@ fun UserAdminItem(
                         Text("Säljare", style = MaterialTheme.typography.bodySmall)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = user.isLageransvarig, onCheckedChange = { 
-                            onUpdateUser(user.copy(isLageransvarig = !user.isLageransvarig)) 
-                        })
+                        Checkbox(checked = user.isLageransvarig, onCheckedChange = { onUpdateUser(user.copy(isLageransvarig = !user.isLageransvarig)) })
                         Text("Lager", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = user.isTransportor, onCheckedChange = { 
-                            onUpdateUser(user.copy(isTransportor = !user.isTransportor)) 
-                        })
+                        Checkbox(checked = user.isTransportor, onCheckedChange = { onUpdateUser(user.copy(isTransportor = !user.isTransportor)) })
                         Text("Transport", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -1133,17 +925,10 @@ fun UserAdminItem(
             title = { Text("Nollställ mottagna kontanter") },
             text = { Text("Har ${user.name} redovisat ${String.format(Locale.getDefault(), "%.2f", user.cashBalance)} kr kontant?") },
             confirmButton = {
-                Button(onClick = { 
-                    onResetCash()
-                    showResetCashConfirm = false 
-                }) {
-                    Text("Ja, nollställ")
-                }
+                Button(onClick = { onResetCash(); showResetCashConfirm = false }) { Text("Ja, nollställ") }
             },
             dismissButton = {
-                TextButton(onClick = { showResetCashConfirm = false }) {
-                    Text("Avbryt")
-                }
+                TextButton(onClick = { showResetCashConfirm = false }) { Text("Avbryt") }
             }
         )
     }
@@ -1154,17 +939,10 @@ fun UserAdminItem(
             title = { Text("Återställ saldo") },
             text = { Text("Vill du nollställa saldot för ${user.name}?") },
             confirmButton = {
-                Button(onClick = { 
-                    onResetBalance()
-                    showResetConfirm = false 
-                }) {
-                    Text("Återställ")
-                }
+                Button(onClick = { onResetBalance(); showResetConfirm = false }) { Text("Återställ") }
             },
             dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) {
-                    Text("Avbryt")
-                }
+                TextButton(onClick = { showResetConfirm = false }) { Text("Avbryt") }
             }
         )
     }
@@ -1175,20 +953,10 @@ fun UserAdminItem(
             title = { Text("Ta bort användare") },
             text = { Text("Är du säker på att du vill ta bort ${user.name}? Detta går inte att ångra.") },
             confirmButton = {
-                Button(
-                    onClick = { 
-                        onDelete()
-                        showDeleteConfirm = false 
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Ta bort")
-                }
+                Button(onClick = { onDelete(); showDeleteConfirm = false }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Ta bort") }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Avbryt")
-                }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Avbryt") }
             }
         )
     }
@@ -1205,7 +973,15 @@ fun UserSettingsDialog(
     var fuelConsumption by remember { mutableStateOf(user.fuelConsumption?.toString() ?: "") }
     var bonus by remember { mutableStateOf(user.vehicleBonusPerUnit?.toString() ?: "") }
     var fee by remember { mutableStateOf(user.vehicleFeePerUnit?.toString() ?: "") }
+    var fuelType by remember { mutableStateOf(user.preferredFuelType ?: "95") }
     
+    var storageCost by remember { mutableStateOf(user.storageCost?.toString() ?: "") }
+    var storageInterval by remember { mutableStateOf(user.storagePaymentInterval ?: "Weekly") }
+    var storageDay by remember { mutableStateOf(user.storagePaymentDay?.toString() ?: "1") }
+    
+    var newPassword by remember { mutableStateOf("") }
+    var showPasswordChange by remember { mutableStateOf(false) }
+
     val commissions = remember { mutableStateMapOf<Int, String>().apply {
         user.productCommissions.forEach { (id, value) -> put(id, value.toString()) }
     } }
@@ -1215,26 +991,95 @@ fun UserSettingsDialog(
         title = { Text("Inställningar för ${user.name}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                Text("Fordon & Drivmedel", style = MaterialTheme.typography.titleSmall)
-                TextField(value = fuelPrice, onValueChange = { fuelPrice = it }, label = { Text("Drivmedelspris (kr/L)") }, placeholder = { Text("Global standard") }, modifier = Modifier.fillMaxWidth())
-                TextField(value = fuelConsumption, onValueChange = { fuelConsumption = it }, label = { Text("Förbrukning (L/mil)") }, placeholder = { Text("Global standard") }, modifier = Modifier.fillMaxWidth())
-                TextField(value = bonus, onValueChange = { bonus = it }, label = { Text("Bonus Egen Bil (kr/enhet)") }, placeholder = { Text("Global standard") }, modifier = Modifier.fillMaxWidth())
-                TextField(value = fee, onValueChange = { fee = it }, label = { Text("Avgift Lånad Bil (kr/enhet)") }, placeholder = { Text("Global standard") }, modifier = Modifier.fillMaxWidth())
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Provision per produkt (kr/g)", style = MaterialTheme.typography.titleSmall)
-                
-                products.forEach { product ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(product.name, modifier = Modifier.weight(1f))
+                if (user.isTransportor) {
+                    Text("Fordon & Drivmedel", style = MaterialTheme.typography.titleSmall)
+                    
+                    Text("Aktiv bränsletyp", style = MaterialTheme.typography.labelSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("95", "98", "Diesel").forEach { type ->
+                            FilterChip(
+                                selected = fuelType == type,
+                                onClick = { fuelType = type },
+                                label = { Text(type) }
+                            )
+                        }
+                    }
+                    
+                    TextField(value = fuelPrice, onValueChange = { fuelPrice = it }, label = { Text("Drivmedelspris (kr/L)") }, placeholder = { Text("Hämtas automatiskt") }, modifier = Modifier.fillMaxWidth())
+                    TextField(value = fuelConsumption, onValueChange = { fuelConsumption = it }, label = { Text("Förbrukning (L/mil)") }, modifier = Modifier.fillMaxWidth())
+                    TextField(value = bonus, onValueChange = { bonus = it }, label = { Text("Bonus Egen Bil (kr/enhet)") }, modifier = Modifier.fillMaxWidth())
+                    TextField(value = fee, onValueChange = { fee = it }, label = { Text("Avgift Lånad Bil (kr/enhet)") }, modifier = Modifier.fillMaxWidth())
+                }
+
+                if (user.isLageransvarig) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text("Lagerhållning & Hyra", style = MaterialTheme.typography.titleSmall)
+                    TextField(value = storageCost, onValueChange = { storageCost = it }, label = { Text("Kostnad (kr)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            var expanded by remember { mutableStateOf(false) }
+                            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if(storageInterval == "Weekly") "Veckovis" else "Månadsvis")
+                            }
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                DropdownMenuItem(text = { Text("Veckovis") }, onClick = { storageInterval = "Weekly"; expanded = false })
+                                DropdownMenuItem(text = { Text("Månadsvis") }, onClick = { storageInterval = "Monthly"; expanded = false })
+                            }
+                        }
                         TextField(
-                            value = commissions[product.id] ?: "",
-                            onValueChange = { commissions[product.id] = it },
-                            modifier = Modifier.width(80.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            placeholder = { Text("0.0") }
+                            value = storageDay, 
+                            onValueChange = { storageDay = it }, 
+                            label = { Text(if(storageInterval == "Weekly") "Dag (1-7)" else "Datum (1-31)") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     }
+                }
+                
+                if (user.isReseller) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Provision per produkt (kr/g)", style = MaterialTheme.typography.titleSmall)
+                    
+                    products.forEach { product ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(product.name, modifier = Modifier.weight(1f))
+                            TextField(
+                                value = commissions[product.id] ?: "",
+                                onValueChange = { commissions[product.id] = it },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                Text("Säkerhet", style = MaterialTheme.typography.titleSmall)
+                
+                if (!showPasswordChange) {
+                    Button(
+                        onClick = { showPasswordChange = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Icon(Icons.Rounded.LockReset, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ändra lösenord")
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Nytt lösenord") },
+                        modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showPasswordChange = false; newPassword = "" }) {
+                                Icon(Icons.Rounded.Close, null)
+                            }
+                        }
+                    )
                 }
             }
         },
@@ -1242,16 +1087,150 @@ fun UserSettingsDialog(
             Button(onClick = {
                 val updatedCommissions = commissions.mapValues { it.value.replace(",", ".").toDoubleOrNull() ?: 0.0 }.filterValues { it != 0.0 }
                 onSave(user.copy(
+                    password = if (newPassword.isNotBlank()) newPassword else user.password,
                     fuelPrice = fuelPrice.replace(",", ".").toDoubleOrNull(),
                     fuelConsumption = fuelConsumption.replace(",", ".").toDoubleOrNull(),
                     vehicleBonusPerUnit = bonus.replace(",", ".").toDoubleOrNull(),
                     vehicleFeePerUnit = fee.replace(",", ".").toDoubleOrNull(),
+                    preferredFuelType = fuelType,
+                    storageCost = storageCost.replace(",", ".").toDoubleOrNull(),
+                    storagePaymentInterval = storageInterval,
+                    storagePaymentDay = storageDay.toIntOrNull(),
                     productCommissions = updatedCommissions
                 ))
             }) { Text("Spara") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Avbryt") }
+        }
+    )
+}
+
+@Composable
+fun AdminInventorySection(viewModel: AdminViewModel) {
+    val products by viewModel.products.collectAsState()
+    var productToEdit by remember { mutableStateOf<com.example.kksales.data.local.entity.Product?>(null) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var showImageManager by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Hantera Produkter", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Row {
+                IconButton(onClick = { showImageManager = true }) {
+                    Icon(Icons.Rounded.FolderOpen, "Hantera produktbilder")
+                }
+                IconButton(onClick = { showAddDialog = true }) {
+                    Icon(Icons.Rounded.Add, "Lägg till produkt")
+                }
+            }
+        }
+        
+        Spacer(Modifier.height(8.dp))
+        
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+            items(products) { product ->
+                AdminProductItem(
+                    product = product,
+                    onEdit = { productToEdit = it },
+                    onDelete = { viewModel.deleteProduct(it) }
+                )
+            }
+        }
+    }
+
+    if (showImageManager) {
+        ImageManagerDialog(
+            onDismiss = { showImageManager = false }
+        )
+    }
+
+    if (showAddDialog) {
+        ProductDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { name, cost, price, profit, qty, unit, imageUri, bulkPrices, threshold ->
+                val savedUri = imageUri?.let { uriStr ->
+                    FileUtils.saveImageToInternalStorage(context, android.net.Uri.parse(uriStr))
+                } ?: imageUri
+                
+                viewModel.addProduct(name, cost, price, profit, qty, unit, savedUri, bulkPrices, threshold)
+                showAddDialog = false
+            }
+        )
+    }
+
+    productToEdit?.let { product ->
+        ProductDialog(
+            product = product,
+            onDismiss = { productToEdit = null },
+            onConfirm = { name, cost, price, profit, qty, unit, imageUri, bulkPrices, threshold ->
+                val savedUri = if (imageUri != null && imageUri != product.imageUri) {
+                    FileUtils.saveImageToInternalStorage(context, android.net.Uri.parse(imageUri))
+                } else {
+                    imageUri
+                }
+
+                viewModel.updateProduct(product.copy(
+                    name = name, 
+                    unitCost = cost, 
+                    salesPrice = price, 
+                    profitPerUnit = profit,
+                    resellerPrice = price - profit,
+                    quantity = qty, 
+                    unit = unit,
+                    imageUri = savedUri,
+                    bulkPrices = bulkPrices,
+                    lowStockThreshold = threshold
+                ))
+                productToEdit = null
+            }
+        )
+    }
+}
+
+@Composable
+fun ImageManagerDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var images by remember { mutableStateOf(FileUtils.getAllProductImageUris(context)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Hanterade Produktbilder") },
+        text = {
+            if (images.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    Text("Inga sparade bilder")
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxHeight(0.6f)) {
+                    items(images) { uri ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(4.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(uri.substringAfterLast("/").take(15) + "...", modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                FileUtils.deleteImageFromInternalStorage(uri)
+                                images = FileUtils.getAllProductImageUris(context)
+                            }) {
+                                Icon(Icons.Rounded.Delete, "Ta bort bild", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text("Stäng") }
         }
     )
 }

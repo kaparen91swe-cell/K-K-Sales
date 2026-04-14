@@ -47,17 +47,24 @@ class UserViewModel(
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
-    val language = userPreferencesManager.language
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "sv")
+    private val _toastMessage = MutableSharedFlow<String>()
+    val toastMessage = _toastMessage.asSharedFlow()
+
+    val language = flowOf("sv").stateIn(viewModelScope, SharingStarted.Eagerly, "sv")
 
     fun setLanguage(lang: String) {
-        viewModelScope.launch {
-            userPreferencesManager.setLanguage(lang)
-        }
+        // Språkbyte inaktiverat - alltid svenska
     }
 
     init {
         viewModelScope.launch {
+            // Check for automatic login
+            val userId = userPreferencesManager.currentUserId.first()
+            val remember = userPreferencesManager.rememberMe.first()
+            if (userId != null && !remember) {
+                userPreferencesManager.clearUser()
+            }
+
             userRepository.refreshUsers()
         }
         viewModelScope.launch {
@@ -269,6 +276,18 @@ class UserViewModel(
         }
     }
 
+    fun resetGlobalStatistics() {
+        viewModelScope.launch {
+            // Nolla alla transaktioner (Historik/Senaste händelser/Historik)
+            transactionRepository.deleteAllTransactions()
+            // Nolla alla användares saldon och kontanter (Vinst/Saldo, Kontanter)
+            userRepository.resetAllBalances()
+            userRepository.resetAllCashBalances()
+            // Nolla alla uppdrag (Händelser)
+            taskRepository.deleteAllTasks()
+        }
+    }
+
     fun updateProfileIcon(iconName: String) {
         val currentUser = _user.value ?: return
         viewModelScope.launch {
@@ -312,17 +331,26 @@ class UserViewModel(
 
     fun triggerGithubUpdate() {
         viewModelScope.launch {
-            // I en verklig miljö skulle detta skicka ett anrop till en backend
-            // som triggar en GitHub Action (workflow_dispatch).
-            // Här simulerar vi processen.
+            _toastMessage.emit("Startar GitHub Update...")
             println("Triggar GitHub Update: Genererar ny JSON och uppdaterar version...")
             
             try {
-                // Exempel på anrop till servern för att pusha ändringar
-                // val response = apiService.triggerDeploy(settings = _settings.value)
-                // if (response.isSuccessful) { ... }
+                val response = userRepository.triggerDeploy(
+                    note = "Uppdatering från App Developer Mode",
+                    changes = emptyMap() 
+                )
+                
+                if (response.success) {
+                    _toastMessage.emit("GitHub push lyckades: ${response.message}")
+                    println("GitHub push lyckades: ${response.message}")
+                } else {
+                    _toastMessage.emit("GitHub push misslyckades: ${response.message}")
+                    println("GitHub push misslyckades: ${response.message}")
+                }
             } catch (e: Exception) {
+                _toastMessage.emit("GitHub push misslyckades: ${e.message}")
                 println("GitHub push misslyckades: ${e.message}")
+                e.printStackTrace()
             }
         }
     }

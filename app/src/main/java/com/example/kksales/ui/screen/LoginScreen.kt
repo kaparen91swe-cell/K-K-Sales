@@ -45,14 +45,14 @@ fun LoginScreen(viewModel: UserViewModel) {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "K&K Sales",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (isRegistering) "Skapa nytt konto" else "Logga in för att fortsätta",
+                text = if (isRegistering) stringResource(R.string.msg_register_info) else stringResource(R.string.msg_login_info),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -67,7 +67,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     viewModel.clearLoginError()
                     registerError = null
                 },
-                label = { Text("Användarnamn") },
+                label = { Text(stringResource(R.string.label_username)) },
                 leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -84,7 +84,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     viewModel.clearLoginError()
                     registerError = null
                 },
-                label = { Text("Lösenord") },
+                label = { Text(stringResource(R.string.label_password)) },
                 leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
@@ -99,7 +99,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
-                    Text("Spara mina uppgifter", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.label_remember_me), style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
@@ -121,7 +121,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     enabled = username.isNotBlank() && password.isNotBlank()
                 ) {
-                    Text("Logga in")
+                    Text(stringResource(R.string.action_login))
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 TextButton(onClick = { 
@@ -130,7 +130,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     password = ""
                     viewModel.clearLoginError()
                 }) {
-                    Text("Inget konto? Skapa ett här")
+                    Text(stringResource(R.string.action_no_account))
                 }
             } else {
                 Button(
@@ -150,7 +150,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     enabled = username.isNotBlank() && password.isNotBlank()
                 ) {
-                    Text("Spara och registrera")
+                    Text(stringResource(R.string.action_register_save))
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 TextButton(onClick = { 
@@ -159,7 +159,7 @@ fun LoginScreen(viewModel: UserViewModel) {
                     password = ""
                     registerError = null
                 }) {
-                    Text("Tillbaka till inloggning")
+                    Text(stringResource(R.string.action_back_to_login))
                 }
             }
         }
@@ -175,6 +175,7 @@ fun FirstPasswordScreen(
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -183,14 +184,14 @@ fun FirstPasswordScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Välkommen ${user.name}!",
+                text = stringResource(R.string.msg_welcome_user, user.name),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Ditt konto har skapats av en administratör. Välj ett lösenord för att fortsätta.",
+                text = stringResource(R.string.msg_first_pass_info),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
@@ -200,7 +201,7 @@ fun FirstPasswordScreen(
             OutlinedTextField(
                 value = newPassword,
                 onValueChange = { newPassword = it; error = null },
-                label = { Text("Nytt lösenord") },
+                label = { Text(stringResource(R.string.label_new_password)) },
                 leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
@@ -212,7 +213,7 @@ fun FirstPasswordScreen(
             OutlinedTextField(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it; error = null },
-                label = { Text("Bekräfta lösenord") },
+                label = { Text(stringResource(R.string.label_confirm_password)) },
                 leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
@@ -233,9 +234,9 @@ fun FirstPasswordScreen(
             Button(
                 onClick = {
                     if (newPassword.length < 4) {
-                        error = "Lösenordet måste vara minst 4 tecken"
+                        error = context.getString(R.string.error_pass_short)
                     } else if (newPassword != confirmPassword) {
-                        error = "Lösenorden matchar inte"
+                        error = context.getString(R.string.error_pass_mismatch)
                     } else {
                         onConfirm(newPassword)
                     }
@@ -243,11 +244,11 @@ fun FirstPasswordScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = newPassword.isNotBlank() && confirmPassword.isNotBlank()
             ) {
-                Text("Spara lösenord och logga in")
+                Text(stringResource(R.string.action_save_pass_login))
             }
             
             TextButton(onClick = onCancel) {
-                Text("Avbryt")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     }

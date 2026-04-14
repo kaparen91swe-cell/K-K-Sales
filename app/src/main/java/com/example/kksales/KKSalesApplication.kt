@@ -82,7 +82,7 @@ class KKSalesApplication : Application() {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-        .addMigrations(AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_15_16)
+        .addMigrations(AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17, AppDatabase.MIGRATION_17_18, AppDatabase.MIGRATION_19_20, AppDatabase.MIGRATION_20_21)
         .addCallback(AppDatabase.getCallback(kotlinx.coroutines.MainScope()) { database.productDao() })
         .fallbackToDestructiveMigration(dropAllTables = true)
         .build()

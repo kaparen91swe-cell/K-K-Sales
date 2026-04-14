@@ -16,4 +16,6 @@ class TaskRepository(private val taskDao: TaskDao) {
     suspend fun completeTask(taskId: Int) {
         taskDao.updateTaskStatus(taskId, true, System.currentTimeMillis())
     }
+
+    suspend fun deleteAllTasks() = taskDao.deleteAllTasks()
 }

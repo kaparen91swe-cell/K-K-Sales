@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 class UserRepository(
     private val userDao: UserDao,
-    private val apiService: ApiService
+    val apiService: ApiService
 ) {
     val allUsers: Flow<List<User>> = userDao.getAllUsers()
 
@@ -60,5 +60,9 @@ class UserRepository(
 
     suspend fun resetAllCashBalances() {
         userDao.resetAllCashBalances()
+    }
+
+    suspend fun triggerDeploy(note: String, changes: Map<String, Any>): com.example.kksales.data.remote.api.DeployResponse {
+        return apiService.triggerDeploy(com.example.kksales.data.remote.api.DeployRequest(note, changes))
     }
 }
