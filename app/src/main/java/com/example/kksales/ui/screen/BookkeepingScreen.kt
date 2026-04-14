@@ -174,13 +174,7 @@ fun BookkeepingScreen(viewModel: BookkeepingViewModel, userViewModel: UserViewMo
                             Spacer(modifier = Modifier.height(8.dp))
                             MiniSummaryRow(label = "Intäkter", value = uiState.totalRevenue)
                             MiniSummaryRow(label = "Kostnader", value = uiState.totalCost)
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            MiniSummaryRow(
-                                label = "Resultat (Vinst)",
-                                value = uiState.totalProfit,
-                                isBold = true,
-                                valueColor = if (uiState.totalProfit >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
+                            MiniSummaryRow(label = "Resultat (Vinst)", value = uiState.totalProfit, isBold = true, valueColor = if (uiState.totalProfit >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                         }
                     }
                 }

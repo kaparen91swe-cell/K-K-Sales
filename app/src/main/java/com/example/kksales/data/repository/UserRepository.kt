@@ -44,7 +44,13 @@ class UserRepository(
     suspend fun updateUser(user: User) {
         userDao.updateUser(user)
         try {
-            apiService.updateUser(user.id, user)
+            val response = apiService.updateUser(user.id, user)
+        } catch (e: retrofit2.HttpException) {
+            if (e.code() == 404) {
+                // Användaren finns inte på servern, ta bort den lokalt också
+                userDao.deleteUser(user)
+            }
+            e.printStackTrace()
         } catch (e: Exception) {
             e.printStackTrace()
         }

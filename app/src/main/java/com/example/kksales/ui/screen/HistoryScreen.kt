@@ -24,6 +24,8 @@ fun HistoryScreen(
 ) {
     val transactions by userViewModel.transactions.collectAsState()
     val products by catalogViewModel.products.collectAsState()
+    val user by userViewModel.user.collectAsState()
+    val isKaparen = user?.isAdmin == true || user?.role?.contains("Boss", ignoreCase = true) == true
 
     Scaffold(
         topBar = {
@@ -45,7 +47,13 @@ fun HistoryScreen(
             if (transactions.isEmpty()) {
                 item { Text(stringResource(R.string.msg_no_transactions)) }
             } else {
-                items(transactions.reversed()) { transaction ->
+                val filteredTransactions = if (isKaparen) {
+                    transactions
+                } else {
+                    transactions.filter { !it.description.contains("Lagerpåfyllning", ignoreCase = true) }
+                }
+
+                items(filteredTransactions.reversed()) { transaction ->
                     val productName = products.find { it.id == transaction.productId }?.name ?: stringResource(R.string.label_unknown_product)
                     TransactionItem(transaction, productName = productName)
                 }

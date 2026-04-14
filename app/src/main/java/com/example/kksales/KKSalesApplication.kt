@@ -21,6 +21,10 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.MainScope
 
 class KKSalesApplication : Application() {
 
@@ -35,6 +39,36 @@ class KKSalesApplication : Application() {
         createNotificationChannel()
         setupSyncWorker()
         setupFuelUpdateWorker()
+        applyBundledDesign()
+    }
+
+    private fun applyBundledDesign() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val jsonString = assets.open("design_config.json").bufferedReader().use { it.readText() }
+                val moshi = com.squareup.moshi.Moshi.Builder()
+                    .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                    .build()
+                val type = com.squareup.moshi.Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
+                val adapter = moshi.adapter<Map<String, Any>>(type)
+                val design = adapter.fromJson(jsonString)
+                
+                if (design != null) {
+                    val current = settingsRepository.getSettings()
+                    val updated = current.copy(
+                        fuelPrice95 = (design["fuelPrice95"] as? Double) ?: current.fuelPrice95,
+                        fuelPrice98 = (design["fuelPrice98"] as? Double) ?: current.fuelPrice98,
+                        fuelPriceDiesel = (design["fuelPriceDiesel"] as? Double) ?: current.fuelPriceDiesel,
+                        fuelConsumption = (design["fuelConsumption"] as? Double) ?: current.fuelConsumption,
+                        vehicleBonusPerUnit = (design["vehicleBonusPerUnit"] as? Double) ?: current.vehicleBonusPerUnit,
+                        vehicleFeePerUnit = (design["vehicleFeePerUnit"] as? Double) ?: current.vehicleFeePerUnit
+                    )
+                    settingsRepository.updateSettings(updated)
+                }
+            } catch (e: Exception) {
+                // Ingen fil eller fel format, ignorera
+            }
+        }
     }
 
     private fun setupFuelUpdateWorker() {

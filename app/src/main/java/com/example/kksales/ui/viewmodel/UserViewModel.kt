@@ -342,26 +342,35 @@ class UserViewModel(
 
     fun triggerGithubUpdate() {
         viewModelScope.launch {
-            _toastMessage.emit("Startar GitHub Update...")
-            println("Triggar GitHub Update: Genererar ny JSON och uppdaterar version...")
+            val s = _settings.value
+            val designMap = mapOf(
+                "fuelPrice95" to s.fuelPrice95,
+                "fuelPrice98" to s.fuelPrice98,
+                "fuelPriceDiesel" to s.fuelPriceDiesel,
+                "fuelConsumption" to s.fuelConsumption,
+                "vehicleBonusPerUnit" to s.vehicleBonusPerUnit,
+                "vehicleFeePerUnit" to s.vehicleFeePerUnit,
+                "isDeveloperModeEnabled" to true
+            )
+
+            _toastMessage.emit("Paketerar design och skickar till GitHub...")
             
             try {
+                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                val note = "Designuppdatering: ${sdf.format(java.util.Date())}"
+                
                 val response = userRepository.triggerDeploy(
-                    note = "Uppdatering från App Developer Mode",
-                    changes = emptyMap() 
+                    note = note,
+                    changes = designMap 
                 )
                 
                 if (response.success) {
-                    _toastMessage.emit("GitHub push lyckades: ${response.message}")
-                    println("GitHub push lyckades: ${response.message}")
+                    _toastMessage.emit("GitHub push lyckades! Bygge startat.")
                 } else {
                     _toastMessage.emit("GitHub push misslyckades: ${response.message}")
-                    println("GitHub push misslyckades: ${response.message}")
                 }
             } catch (e: Exception) {
-                _toastMessage.emit("GitHub push misslyckades: ${e.message}")
-                println("GitHub push misslyckades: ${e.message}")
-                e.printStackTrace()
+                _toastMessage.emit("Fel vid anslutning: ${e.message}")
             }
         }
     }

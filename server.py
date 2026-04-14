@@ -4,9 +4,20 @@ import json
 import time
 import os
 import requests
+import logging
+import subprocess
 from dotenv import load_dotenv
 
+# Ladda .env direkt vid start
 load_dotenv()
+
+# Konfigurera loggning för maximal synlighet
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - [%(levelname)s] - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -15,13 +26,16 @@ GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = "kaparen91swe-cell/K-K-Sales"
 GITHUB_WORKFLOW_FILE = "android_build.yml"
 
+# Maskera token för säker loggning vid start
+if GITHUB_TOKEN:
+    masked = f"{GITHUB_TOKEN[:4]}...{GITHUB_TOKEN[-4:]}"
+    logger.info(f"GITHUB_TOKEN identifierad: {masked}")
+else:
+    logger.error("!!! GITHUB_TOKEN SAKNAS I .ENV - Push kommer misslyckas !!!")
+
 # Bitcoin Settings
 BTC_XPUB = os.environ.get('BTC_XPUB', 'DIN_XPUB_HÄR')
 BTC_WALLET_ADDRESS = os.environ.get('BTC_WALLET_ADDRESS', 'DIN_BTC_ADRESS_HÄR')
-
-if not GITHUB_TOKEN:
-    print("WARNING: GITHUB_TOKEN environment variable is not set!")
-    print("GitHub deployment features will not work.")
 
 # Database Configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -39,18 +53,14 @@ class Payment(db.Model):
     amount_sek = db.Column(db.Float)
     amount_btc = db.Column(db.Float)
     address = db.Column(db.String(100))
-    status = db.Column(db.String(50), default='pending') # pending, confirmed, failed
+    status = db.Column(db.String(50), default='pending')
     timestamp = db.Column(db.BigInteger)
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "userId": self.userId,
-            "amount_sek": self.amount_sek,
-            "amount_btc": self.amount_btc,
-            "address": self.address,
-            "status": self.status,
-            "timestamp": self.timestamp
+            "id": self.id, "userId": self.userId, "amount_sek": self.amount_sek,
+            "amount_btc": self.amount_btc, "address": self.address,
+            "status": self.status, "timestamp": self.timestamp
         }
 
 class User(db.Model):
@@ -68,32 +78,22 @@ class User(db.Model):
     role = db.Column(db.String(100))
     profileIcon = db.Column(db.String(100))
     vehicleType = db.Column(db.String(100))
-    
     fuelPrice = db.Column(db.Float)
     fuelConsumption = db.Column(db.Float)
     vehicleBonusPerUnit = db.Column(db.Float)
     vehicleFeePerUnit = db.Column(db.Float)
-    
     productCommissions = db.Column(db.Text, default='{}')
     productResellerPrices = db.Column(db.Text, default='{}')
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "name": self.name,
-            "password": self.password,
-            "balance": self.balance,
-            "cashBalance": self.cashBalance,
-            "isAdmin": self.isAdmin,
-            "isAdminPlus": self.isAdminPlus,
-            "isReseller": self.isReseller,
-            "isLageransvarig": self.isLageransvarig,
-            "isTransportor": self.isTransportor,
-            "role": self.role,
-            "profileIcon": self.profileIcon,
-            "vehicleType": self.vehicleType,
-            "fuelPrice": self.fuelPrice,
-            "fuelConsumption": self.fuelConsumption,
+            "id": self.id, "name": self.name, "password": self.password,
+            "balance": self.balance, "cashBalance": self.cashBalance,
+            "isAdmin": self.isAdmin, "isAdminPlus": self.isAdminPlus,
+            "isReseller": self.isReseller, "isLageransvarig": self.isLageransvarig,
+            "isTransportor": self.isTransportor, "role": self.role,
+            "profileIcon": self.profileIcon, "vehicleType": self.vehicleType,
+            "fuelPrice": self.fuelPrice, "fuelConsumption": self.fuelConsumption,
             "vehicleBonusPerUnit": self.vehicleBonusPerUnit,
             "vehicleFeePerUnit": self.vehicleFeePerUnit,
             "productCommissions": json.loads(self.productCommissions or '{}'),
@@ -115,14 +115,9 @@ class Product(db.Model):
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "name": self.name,
-            "unitCost": self.unitCost,
-            "salesPrice": self.salesPrice,
-            "resellerPrice": self.resellerPrice,
-            "quantity": self.quantity,
-            "unit": self.unit,
-            "imageUri": self.imageUri,
+            "id": self.id, "name": self.name, "unitCost": self.unitCost,
+            "salesPrice": self.salesPrice, "resellerPrice": self.resellerPrice,
+            "quantity": self.quantity, "unit": self.unit, "imageUri": self.imageUri,
             "bulkPrices": json.loads(self.bulkPrices or '[]'),
             "lowStockThreshold": self.lowStockThreshold
         }
@@ -144,18 +139,11 @@ class Transaction(db.Model):
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "userId": self.userId,
-            "productId": self.productId,
-            "amount": self.amount,
-            "vatAmount": self.vatAmount,
-            "vatRate": self.vatRate,
-            "quantity": self.quantity,
-            "timestamp": self.timestamp,
-            "category": self.category,
-            "type": self.type,
-            "paymentMethod": self.paymentMethod,
-            "description": self.description
+            "id": self.id, "userId": self.userId, "productId": self.productId,
+            "amount": self.amount, "vatAmount": self.vatAmount, "vatRate": self.vatRate,
+            "quantity": self.quantity, "timestamp": self.timestamp,
+            "category": self.category, "type": self.type,
+            "paymentMethod": self.paymentMethod, "description": self.description
         }
 
 # --- API ENDPOINTS ---
@@ -172,53 +160,56 @@ def get_users():
 @app.route('/users/register', methods=['POST'])
 def register():
     data = request.json
-    user = User(
-        name=data['name'],
-        password=data.get('password'),
-        isAdmin=data.get('isAdmin', False),
-        isAdminPlus=data.get('isAdminPlus', False),
-        isReseller=data.get('isReseller', False),
-        isLageransvarig=data.get('isLageransvarig', False),
-        isTransportor=data.get('isTransportor', False),
-        role=data.get('role'),
-        profileIcon=data.get('profileIcon'),
-        vehicleType=data.get('vehicleType'),
-        fuelPrice=data.get('fuelPrice'),
-        fuelConsumption=data.get('fuelConsumption'),
-        vehicleBonusPerUnit=data.get('vehicleBonusPerUnit'),
-        vehicleFeePerUnit=data.get('vehicleFeePerUnit'),
-        productCommissions=json.dumps(data.get('productCommissions', {})),
-        productResellerPrices=json.dumps(data.get('productResellerPrices', {}))
-    )
-    db.session.add(user)
-    db.session.commit()
-    return jsonify(user.to_dict())
+    logger.info(f"--- REGISTRERAR: {data.get('name')} ---")
+    try:
+        user = User(
+            name=data['name'], password=data.get('password'),
+            isAdmin=data.get('isAdmin', False), isAdminPlus=data.get('isAdminPlus', False),
+            isReseller=data.get('isReseller', False), isLageransvarig=data.get('isLageransvarig', False),
+            isTransportor=data.get('isTransportor', False), role=data.get('role'),
+            profileIcon=data.get('profileIcon'), vehicleType=data.get('vehicleType'),
+            fuelPrice=data.get('fuelPrice'), fuelConsumption=data.get('fuelConsumption'),
+            vehicleBonusPerUnit=data.get('vehicleBonusPerUnit'),
+            vehicleFeePerUnit=data.get('vehicleFeePerUnit'),
+            productCommissions=json.dumps(data.get('productCommissions', {})),
+            productResellerPrices=json.dumps(data.get('productResellerPrices', {}))
+        )
+        db.session.add(user)
+        db.session.commit()
+        logger.info(f"SPARAD: {user.name} (ID: {user.id})")
+        return jsonify(user.to_dict())
+    except Exception as e:
+        logger.error(f"FEL: {str(e)}")
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/users/<int:id>', methods=['PUT'])
 def update_user(id):
     user = db.session.get(User, id)
-    if not user:
-        return jsonify({"success": False, "message": "User not found"}), 404
+    if not user: return jsonify({"success": False, "message": "User not found"}), 404
     data = request.json
-    for key, value in data.items():
-        if key in ['productCommissions', 'productResellerPrices']:
-            setattr(user, key, json.dumps(value))
-        elif hasattr(user, key):
-            setattr(user, key, value)
-    db.session.commit()
-    return jsonify({"success": True})
+    try:
+        for key, value in data.items():
+            if key in ['productCommissions', 'productResellerPrices']:
+                setattr(user, key, json.dumps(value))
+            elif hasattr(user, key) and key != 'id':
+                setattr(user, key, value)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/users/<int:id>', methods=['DELETE'])
 def delete_user(id):
     user = db.session.get(User, id)
-    if user:
-        # Delete related data
-        Transaction.query.filter_by(userId=id).delete()
-        Payment.query.filter_by(userId=id).delete()
-        db.session.delete(user)
-        db.session.commit()
-        return jsonify({"success": True, "message": "Användare raderad"})
-    return jsonify({"success": False, "message": "Användare hittades inte"}), 404
+    if not user: return jsonify({"success": False, "message": "Hittas ej"}), 404
+    if user.name == "Kaparen": return jsonify({"success": False, "message": "Ej radera Kaparen"}), 403
+    Transaction.query.filter_by(userId=id).delete()
+    Payment.query.filter_by(userId=id).delete()
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"success": True})
 
 @app.route('/products', methods=['GET'])
 def get_products():
@@ -232,11 +223,8 @@ def sync_product():
     if not prod:
         prod = Product(id=data['id'])
         db.session.add(prod)
-    
-    prod.name = data['name']
-    prod.quantity = data['quantity']
-    prod.salesPrice = data['salesPrice']
-    prod.resellerPrice = data['resellerPrice']
+    prod.name, prod.quantity = data['name'], data['quantity']
+    prod.salesPrice, prod.resellerPrice = data['salesPrice'], data['resellerPrice']
     prod.unit = data.get('unit', 'g')
     prod.unitCost = data.get('unitCost', 0.0)
     prod.lowStockThreshold = data.get('lowStockThreshold', 500)
@@ -244,116 +232,94 @@ def sync_product():
     db.session.commit()
     return jsonify({"success": True})
 
-@app.route('/transactions', methods=['GET'])
-def get_transactions():
-    transactions = Transaction.query.all()
-    return jsonify([t.to_dict() for t in transactions])
-
 @app.route('/transactions', methods=['POST'])
 def sync_transaction():
     data = request.json
+    if data.get('paymentMethod') in ['Account', 'Konto']:
+        user = db.session.get(User, data['userId'])
+        if user:
+            if data.get('type') == 'EXPENSE': user.balance -= data['amount']
+            else: user.balance += data['amount']
     trans = Transaction(
-        userId=data['userId'],
-        productId=data['productId'],
-        amount=data['amount'],
-        vatAmount=data.get('vatAmount', 0.0),
-        vatRate=data.get('vatRate', 0.0),
-        quantity=data.get('quantity', 0),
-        timestamp=data['timestamp'],
-        category=data.get('category'),
-        type=data.get('type'),
-        paymentMethod=data.get('paymentMethod'),
-        description=data.get('description')
+        userId=data['userId'], productId=data.get('productId', 0),
+        amount=data['amount'], vatAmount=data.get('vatAmount', 0.0),
+        vatRate=data.get('vatRate', 0.0), quantity=data.get('quantity', 0),
+        timestamp=data.get('timestamp', int(time.time() * 1000)),
+        category=data.get('category'), type=data.get('type'),
+        paymentMethod=data.get('paymentMethod'), description=data.get('description')
     )
     db.session.add(trans)
     db.session.commit()
     return jsonify({"success": True})
 
-@app.route('/orders/process', methods=['POST'])
-def process_order():
-    return jsonify({"success": True, "message": "Order mottagen av K&K Server"})
-
-@app.route('/payments/btc/price', methods=['GET'])
-def get_btc_price():
-    try:
-        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=sek")
-        data = response.json()
-        return jsonify({"price_sek": data['bitcoin']['sek']})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/payments/btc/create', methods=['POST'])
-def create_btc_payment():
-    data = request.json
-    userId = data.get('userId')
-    amount_sek = data.get('amount_sek')
-    
-    try:
-        price_response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=sek")
-        btc_price = price_response.json()['bitcoin']['sek']
-        amount_btc = amount_sek / btc_price
-    except:
-        return jsonify({"error": "Kunde inte hämta BTC-pris"}), 500
-
-    address = BTC_WALLET_ADDRESS
-    
-    new_payment = Payment(
-        userId=userId,
-        amount_sek=amount_sek,
-        amount_btc=amount_btc,
-        address=address,
-        status='pending',
-        timestamp=int(time.time() * 1000)
-    )
-    db.session.add(new_payment)
-    db.session.commit()
-    
-    return jsonify({
-        "payment_id": new_payment.id,
-        "address": address,
-        "amount_btc": f"{amount_btc:.8f}",
-        "amount_sek": amount_sek
-    })
-
-@app.route('/payments/btc/check/<int:payment_id>', methods=['GET'])
-def check_btc_payment(payment_id):
-    payment = db.session.get(Payment, payment_id)
-    if not payment:
-        return jsonify({"success": False, "message": "Payment not found"}), 404
-    return jsonify(payment.to_dict())
-
 @app.route('/admin/trigger-deploy', methods=['POST'])
 def trigger_deploy():
+    load_dotenv(override=True)
+    current_token = os.environ.get('GITHUB_TOKEN')
+    if not current_token:
+        return jsonify({"success": False, "message": "Server saknar GITHUB_TOKEN"}), 500
+        
     data = request.json
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    payload = {
-        "ref": "main",
-        "inputs": {
-            "version_note": data.get("note", "Manual update from app"),
-            "design_changes": json.dumps(data.get("changes", {}))
-        }
-    }
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW_FILE}/dispatches"
+    logger.info(f">>> STARTAR TOTAL PUSH OCH DEPLOY (Token: {current_token[-4:]}) <<<")
     
     try:
-        response = requests.post(url, headers=headers, json=payload)
-        if response.status_code == 204:
-            return jsonify({"success": True, "message": "GitHub Action triggad framgångsrikt!"})
+        # 1. Pusha lokala ändringar först
+        logger.info("Steg 1: Pushar lokala kodändringar till GitHub...")
+        subprocess.run(["git", "add", "."], check=True)
+        commit_msg = f"Design & System Update: {data.get('note', 'Automatic')}"
+        subprocess.run(["git", "commit", "-m", commit_msg], capture_output=True)
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        logger.info("Steg 1 KLART: Kod puschad till GitHub.")
+
+        # 2. Trigga GitHub Action
+        logger.info("Steg 2: Triggar GitHub Build Action...")
+        headers = {
+            "Authorization": f"Bearer {current_token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+        payload = {
+            "ref": "main",
+            "inputs": {
+                "version_note": data.get("note", "Update from App"),
+                "design_changes": json.dumps(data.get("changes", {}))
+            }
+        }
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW_FILE}/dispatches"
+        
+        res = requests.post(url, headers=headers, json=payload)
+        if res.status_code == 204:
+            logger.info("SUCCESS: Hela kedjan klar! Bygget startat på GitHub.")
+            return jsonify({"success": True, "message": "Kod puschad och bygge startat!"})
         else:
-            return jsonify({
-                "success": False, 
-                "message": f"Kunde inte trigga GitHub Action: {response.status_code}",
-                "error": response.text
-            }), 500
+            logger.error(f"FEL vid trigger: {res.status_code} - {res.text}")
+            return jsonify({"success": False, "message": f"GitHub API Fel: {res.status_code}"}), res.status_code
+            
+    except subprocess.CalledProcessError as e:
+        logger.error(f"GIT FEL: {e.output}")
+        return jsonify({"success": False, "message": "Git push misslyckades. Är du inloggad i git?"}), 500
     except Exception as e:
+        logger.exception("KRITISKT FEL:")
         return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/stats/economic-overview', methods=['GET'])
+def get_economic_overview():
+    transactions = Transaction.query.all()
+    income = sum(t.amount for t in transactions if t.type == 'INCOME' and t.category == 'SALES')
+    expenses = sum(t.amount for t in transactions if t.type == 'EXPENSE')
+    costs = 0.0
+    for t in transactions:
+        if t.category == 'SALES' and t.productId > 0:
+            p = db.session.get(Product, t.productId)
+            if p: costs += (p.unitCost * t.quantity)
+    return jsonify({"income": income, "profit": income - costs, "expenses": expenses, "costs": costs})
 
 if __name__ == '__main__':
     from waitress import serve
     with app.app_context():
         db.create_all()
-    print("K&K Sales Online WSGI Server startad på port 8080...")
+    logger.info("==================================================")
+    logger.info("K&K Sales 'Full Access' Server Online på port 8080")
+    logger.info("Hanterar nu Git Push + GitHub Actions automatiskt.")
+    logger.info("==================================================")
     serve(app, host='0.0.0.0', port=8080)

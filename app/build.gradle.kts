@@ -83,7 +83,9 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        viewBinding = false
     }
+    buildToolsVersion = "37.0.0"
 }
 
 dependencies {
