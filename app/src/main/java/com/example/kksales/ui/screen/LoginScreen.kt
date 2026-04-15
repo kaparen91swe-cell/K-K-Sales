@@ -16,33 +16,13 @@ import com.example.kksales.ui.viewmodel.UserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(viewModel: UserViewModel, updateViewModel: com.example.kksales.ui.viewmodel.UpdateViewModel) {
+fun LoginScreen(viewModel: UserViewModel) {
     var isRegistering by remember { mutableStateOf(false) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val loginError by viewModel.loginError.collectAsState()
     val needsFirstPassword by viewModel.needsFirstPassword.collectAsState()
     var registerError by remember { mutableStateOf<String?>(null) }
-    
-    val updateInfo by updateViewModel.updateInfo.collectAsState()
-
-    if (updateInfo != null) {
-        AlertDialog(
-            onDismissRequest = { updateViewModel.dismissUpdate() },
-            title = { Text("Uppdatering tillgänglig") },
-            text = { Text("En ny version av K&K Sales finns tillgänglig. Vill du uppdatera nu?") },
-            confirmButton = {
-                Button(onClick = { updateViewModel.startUpdate(updateInfo!!.apkUrl) }) {
-                    Text("Ja, uppdatera")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { updateViewModel.dismissUpdate() }) {
-                    Text("Nej, senare")
-                }
-            }
-        )
-    }
 
     if (needsFirstPassword != null) {
         FirstPasswordScreen(

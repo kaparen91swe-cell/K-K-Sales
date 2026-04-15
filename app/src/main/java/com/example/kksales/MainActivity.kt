@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
 
             KKSalesTheme {
                 if (user == null) {
-                    LoginScreen(userViewModel, updateViewModel)
+                    LoginScreen(userViewModel)
                 } else {
                     MainScreen(userViewModel, catalogViewModel, adminViewModel, bookkeepingViewModel, chatViewModel)
                 }

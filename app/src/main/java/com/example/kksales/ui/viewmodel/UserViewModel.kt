@@ -137,14 +137,11 @@ class UserViewModel(
 
     fun registerUser(name: String, password: String?, isAdmin: Boolean = false, isAdminPlus: Boolean = false, isReseller: Boolean = false, isLageransvarig: Boolean = false, isTransportor: Boolean = false, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            // Kontrollera om namnet är upptaget - vi gör en refresh först för att vara säkra
-            userRepository.refreshUsers()
             val existingUser = userRepository.getUserByName(name)
             if (existingUser != null) {
-                onError("Användarnamnet är redan upptaget")
+                onError("Användarnamnet är upptaget")
                 return@launch
             }
-            
             val newUser = User(
                 name = name, 
                 password = password, 
@@ -155,13 +152,8 @@ class UserViewModel(
                 isLageransvarig = isLageransvarig,
                 isTransportor = isTransportor
             )
-            
-            try {
-                userRepository.insertUser(newUser)
-                onSuccess()
-            } catch (e: Exception) {
-                onError("Kunde inte spara användare: ${e.message}")
-            }
+            userRepository.insertUser(newUser)
+            onSuccess()
         }
     }
 
