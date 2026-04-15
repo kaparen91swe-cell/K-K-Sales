@@ -26,6 +26,19 @@ class UserRepository(
     suspend fun refreshUsers() {
         try {
             val remoteUsers = apiService.getAllUsers()
+            val remoteIds = remoteUsers.map { it.id }
+            
+            // 1. Hämta alla lokala användare
+            val localUsers = userDao.getAllUsersOnce() // Vi behöver en version som inte är Flow
+            
+            // 2. Ta bort de som inte finns på servern längre (utom de med ID 0/temp)
+            localUsers.forEach { local ->
+                if (local.id != 0 && local.id !in remoteIds && local.name != "Kaparen") {
+                    userDao.deleteUser(local)
+                }
+            }
+
+            // 3. Spara/Uppdatera de från servern
             remoteUsers.forEach { userDao.insertUser(it) }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -33,10 +46,14 @@ class UserRepository(
     }
 
     suspend fun insertUser(user: User) {
-        userDao.insertUser(user)
         try {
-            apiService.registerUser(user)
+            // 1. Registrera först på servern för att få det officiella ID:t
+            val registeredUser = apiService.registerUser(user)
+            // 2. Spara i lokala DB med serverns ID
+            userDao.insertUser(registeredUser)
         } catch (e: Exception) {
+            // Om servern är nere, spara lokalt ändå (Room ger ett temp-ID)
+            userDao.insertUser(user)
             e.printStackTrace()
         }
     }
