@@ -19,7 +19,7 @@ interface UserDao {
     suspend fun getUserByName(name: String): User?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertUser(user: User)
+    suspend fun insertUser(user: User): Long
 
     @Update
     suspend fun updateUser(user: User)
